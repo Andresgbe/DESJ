@@ -1,56 +1,121 @@
-# Welcome to your Expo app 👋
+# DESJ — asistente personal de Steven
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+App nativa para iPhone (y Android) hecha con **Expo + React Native**. Si sabes React, ya sabes el 80%: en lugar de `<div>` usas `<View>`, en lugar de `<p>` usas `<Text>`, y los estilos son objetos JS (flexbox por defecto, en columna).
 
-## Get started
+## Qué hay hoy (fase 0 · esqueleto)
 
-1. Install dependencies
+| Pestaña | Qué hace |
+|---|---|
+| Núcleo | Saludo según la hora, anillo HUD, resumen del día |
+| Chat | Chat con DESJ en modo demo, **responde en voz** (botón VOZ ON/OFF) |
+| Salud | Pastillas del día: marcar tomadas, agregar/quitar, **recordatorios diarios reales** |
+| Negocios | Ganadería, legal y mercado con datos de ejemplo |
+| Rutinas | Interruptores que programan avisos diarios (ej. resumen 07:40) |
 
-   ```bash
-   npm install
-   ```
+Todo se guarda en el teléfono. Los recordatorios los programa el propio iPhone, no hace falta servidor.
 
-2. Start the app
+En el chat prueba: `¿qué pastillas me faltan?` o `recuérdame llamar al notario a las 4 de la tarde`.
 
-   ```bash
-   npx expo start
-   ```
+---
 
-In the output, you'll find options to open the app in a
+## Paso a paso para correrlo en tu iPhone (gratis)
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### 1. Instala en tu computadora (una sola vez)
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+- **Node.js LTS** → https://nodejs.org (verifica con `node -v`)
+- **Git** → https://git-scm.com
+- **VS Code** (recomendado)
 
-## Get a fresh project
+No necesitas Mac ni Xcode.
 
-When you're ready, run:
+### 2. Instala en el iPhone
+
+- **Expo Go** desde el App Store (gratis).
+
+### 3. Arranca el proyecto
 
 ```bash
-npm run reset-project
+cd desj
+npm install
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Sale un **código QR** en la terminal. Ábrelo con la **cámara del iPhone** → toca el aviso → se abre en Expo Go.
 
-### Other setup steps
+> El iPhone y la computadora deben estar en el **mismo Wi-Fi**. Si no conecta (redes de oficina, VPN), usa:
+> `npx expo start --tunnel`
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+### 4. Programa con la app abierta
 
-## Learn more
+Edita cualquier archivo en `src/` y guarda: el teléfono se actualiza solo en 1–2 segundos.
+Agita el teléfono para abrir el menú de desarrollo (recargar, ver errores).
 
-To learn more about developing your project with Expo, look at the following resources:
+### 5. Que Steven lo pruebe
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+- **Rápido:** que instale Expo Go y escanee el mismo QR mientras tú tienes `npx expo start --tunnel` corriendo.
+- **Sin depender de tu computadora:** más adelante publicamos con `eas update` (plan gratis de Expo) y Steven lo abre desde un link.
 
-## Join the community
+---
 
-Join our community of developers creating universal apps.
+## Subirlo a tu GitHub
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+1. En github.com → **New repository** → nombre `desj` → **Private** → sin README → Create.
+2. En la carpeta del proyecto:
+
+```bash
+git remote add origin https://github.com/TU_USUARIO/desj.git
+git branch -M main
+git push -u origin main
+```
+
+(El proyecto ya trae el primer commit hecho.)
+
+---
+
+## Estructura
+
+```
+src/
+  app/              ← cada archivo es una pantalla (Expo Router)
+    _layout.tsx     ← las 5 pestañas de abajo
+    index.tsx       ← Núcleo
+    chat.tsx        ← Chat + voz
+    salud.tsx       ← Pastillas y recordatorios
+    negocios.tsx
+    rutinas.tsx
+  components/
+    ui.tsx          ← Screen, Card, Title, Label, HudRing…
+    icons.tsx       ← íconos de las pestañas
+  lib/
+    store.tsx       ← estado guardado en el teléfono
+    notifications.ts← recordatorios locales
+    brain.ts        ← "cerebro" demo del chat (aquí entrará Claude)
+  theme.ts          ← colores y fuentes
+```
+
+## Comandos útiles
+
+```bash
+npx expo start            # arrancar
+npx tsc --noEmit          # revisar tipos
+npx expo install <pkg>    # instalar librerías (SIEMPRE así, no con npm install)
+```
+
+---
+
+## Costos
+
+| Etapa | Costo |
+|---|---|
+| Desarrollar y probar en Expo Go (tú y Steven) | **$0** |
+| Base de datos y login (Supabase, plan gratis) | **$0** |
+| Cerebro real (Claude API) | Se paga por uso; con 1–2 personas en prueba son centavos a pocos dólares al mes |
+| App propia instalada en iPhone / App Store | Apple Developer **$99/año** (solo cuando la quieran como app independiente) |
+
+## Siguientes pasos
+
+1. **Supabase**: login de Steven y guardar pastillas/rutinas en la nube.
+2. **Cerebro real**: Edge Function de Supabase que llama a Claude (la API key nunca va en la app) y reemplaza `src/lib/brain.ts`.
+3. **Micrófono** (hablarle a DESJ): necesita *development build* (`eas build`), no corre en Expo Go.
+4. **Exámenes de sangre**: subir PDF/foto y que Claude extraiga los valores.
+5. **Garmin vía Apple Health**: requiere development build y la cuenta de Apple.
