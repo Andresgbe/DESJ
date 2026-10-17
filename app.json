@@ -36,12 +36,26 @@
           "imageWidth": 76
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "expo-sqlite",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "DESJ usa tu calendario para mostrarte la agenda del día y agendar lo que le pidas."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
-    "backgroundColor": "#07050D"
+    "backgroundColor": "#07050D",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f3ea1cc1-c8c4-4833-a6e9-f11997f46430"
+      }
+    },
+    "owner": "andruu.gil"
   }
 }

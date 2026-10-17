@@ -1,22 +1,32 @@
 // Pantalla 02 · Chat con DESJ, con respuesta en voz.
 import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 import { Label, Row, Screen } from '@/components/ui';
-import { think } from '@/lib/brain';
+import { useAuth } from '@/lib/auth';
+import { askDesj, loadHistory, think } from '@/lib/brain';
 import { today, useStore } from '@/lib/store';
 import { C, mono } from '@/theme';
 
 type Msg = { id: string; from: 'me' | 'desj'; text: string };
 
 export default function Chat() {
-  const { meds, taken } = useStore();
-  const [msgs, setMsgs] = useState<Msg[]>([
-    { id: '0', from: 'desj', text: 'Hola, Steven. Soy DESJ. Prueba: "¿qué pastillas me faltan?" o "recuérdame llamar al notario a las 4 de la tarde".' },
-  ]);
+  const { meds, taken, refresh } = useStore();
+  const { session, name } = useAuth();
+  const cloud = Boolean(session);
+  const hello = `Hola${name ? `, ${name}` : ''}. Soy DESJ. Prueba: "¿qué pastillas me faltan?" o "recuérdame llamar al notario a las 4 de la tarde".`;
+  const [msgs, setMsgs] = useState<Msg[]>([{ id: '0', from: 'desj', text: hello }]);
+
+  // Con sesión, el chat retoma la conversación guardada.
+  useEffect(() => {
+    if (!cloud) return;
+    loadHistory().then((rows) => {
+      if (rows.length) setMsgs(rows.map((r) => ({ id: r.id, from: r.role === 'user' ? 'me' : 'desj', text: r.content })));
+    });
+  }, [cloud]);
   const [input, setInput] = useState('');
   const [voice, setVoice] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -29,7 +39,14 @@ export default function Chat() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setMsgs((m) => [...m, { id: `${Date.now()}`, from: 'me', text }]);
     setBusy(true);
-    const reply = await think(text, { meds, takenIds: taken[today()] ?? [] });
+    let reply: string;
+    if (cloud) {
+      const res = await askDesj(text);
+      reply = res.reply;
+      if (res.dataChanged) refresh();
+    } else {
+      reply = await think(text, { meds, takenIds: taken[today()] ?? [] });
+    }
     setBusy(false);
     setMsgs((m) => [...m, { id: `${Date.now()}r`, from: 'desj', text: reply }]);
     if (voice) Speech.speak(reply, { language: 'es-ES', rate: 1.0 });
