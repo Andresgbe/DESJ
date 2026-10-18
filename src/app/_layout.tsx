@@ -1,13 +1,13 @@
-// Navegación principal: 5 pestañas abajo.
+// Raíz: sesión, datos y una pila con las pestañas (tabs) y las pantallas del menú de perfil encima.
 import { DarkTheme, ThemeProvider } from 'expo-router';
-import { Tabs } from 'expo-router/js-tabs';
+import { Stack } from 'expo-router/stack';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
-import { IconBusiness, IconChat, IconCore, IconHealth, IconRoutines } from '@/components/icons';
 import { Login } from '@/components/login';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { ChatsProvider } from '@/lib/chats';
 import { StoreProvider } from '@/lib/store';
 import { cloudEnabled } from '@/lib/supabase';
 import { C, mono } from '@/theme';
@@ -40,20 +40,21 @@ function Gate() {
 
   return (
     <StoreProvider>
-      <Tabs
-        screenOptions={{
-          headerShown: false,
-          tabBarActiveTintColor: '#D8C7FF',
-          tabBarInactiveTintColor: C.muted,
-          tabBarStyle: { backgroundColor: C.bg, borderTopColor: C.cardBorder },
-          tabBarLabelStyle: { fontFamily: mono, fontSize: 9.5, letterSpacing: 1 },
-        }}>
-        <Tabs.Screen name="index" options={{ title: 'NÚCLEO', tabBarIcon: ({ color }) => <IconCore color={color} /> }} />
-        <Tabs.Screen name="chat" options={{ title: 'CHAT', tabBarIcon: ({ color }) => <IconChat color={color} /> }} />
-        <Tabs.Screen name="salud" options={{ title: 'SALUD', tabBarIcon: ({ color }) => <IconHealth color={color} /> }} />
-        <Tabs.Screen name="negocios" options={{ title: 'NEGOCIOS', tabBarIcon: ({ color }) => <IconBusiness color={color} /> }} />
-        <Tabs.Screen name="rutinas" options={{ title: 'RUTINAS', tabBarIcon: ({ color }) => <IconRoutines color={color} /> }} />
-      </Tabs>
+      <ChatsProvider>
+        <Stack
+          screenOptions={{
+            headerStyle: { backgroundColor: C.bg },
+            headerTintColor: C.accentSoft,
+            headerTitleStyle: { color: C.text, fontFamily: mono, fontSize: 14 },
+            headerShadowVisible: false,
+            headerBackButtonDisplayMode: 'minimal',
+            contentStyle: { backgroundColor: C.bg },
+          }}>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="conocimiento" options={{ title: 'CONOCIMIENTO' }} />
+          <Stack.Screen name="ajustes" options={{ title: 'AJUSTES' }} />
+        </Stack>
+      </ChatsProvider>
     </StoreProvider>
   );
 }

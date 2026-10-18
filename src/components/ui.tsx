@@ -4,21 +4,27 @@ import { ScrollView, StyleSheet, Text, TextProps, View, ViewStyle } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg';
 
+import { NeuralBackground } from '@/components/neural-bg';
+import { ProfileButton } from '@/components/profile-menu';
 import { C, mono, S } from '@/theme';
 
-export function Screen({ module, children, scroll = true }: { module: string; children: ReactNode; scroll?: boolean }) {
+export function Screen({ module, children, scroll = true, wide = false }: { module: string; children: ReactNode; scroll?: boolean; wide?: boolean }) {
   const body = scroll ? (
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <ScrollView contentContainerStyle={[styles.content, wide && styles.wide]} keyboardShouldPersistTaps="handled">
       {children}
     </ScrollView>
   ) : (
-    <View style={[styles.content, { flex: 1 }]}>{children}</View>
+    <View style={[styles.content, wide && styles.wide, { flex: 1, paddingBottom: 8 }]}>{children}</View>
   );
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <View style={styles.header}>
+      <NeuralBackground />
+      <View style={[styles.header, wide && styles.wide]}>
         <Text style={styles.brand}>● DESJ</Text>
-        <Label>{module}</Label>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Label>{module}</Label>
+          <ProfileButton />
+        </View>
       </View>
       {body}
     </SafeAreaView>
@@ -68,7 +74,7 @@ export function HudRing({ size = 210, big, small, progress }: { size?: number; b
       <Path d="M110 10 A100 100 0 0 1 193 54" stroke={C.accent} strokeWidth={3} strokeLinecap="round" fill="none" />
       <Path d="M50 190 A100 100 0 0 1 18 149" stroke={C.accentSoft} strokeWidth={2} strokeLinecap="round" fill="none" />
       <Circle cx={110} cy={110} r={80} stroke={C.border} strokeWidth={1} strokeDasharray="3 5" fill="none" />
-      <Circle cx={110} cy={110} r={58} stroke="#8B5CF6" strokeWidth={1.2} fill="rgba(168,85,247,0.10)" />
+      <Circle cx={110} cy={110} r={58} stroke={C.hudCore} strokeWidth={1.2} fill="rgba(168,85,247,0.10)" />
       {progress !== undefined && (
         <Circle
           cx={110}
@@ -92,6 +98,9 @@ export function HudRing({ size = 210, big, small, progress }: { size?: number; b
   );
 }
 
+// En pantallas anchas (web, iPad) el contenido no se estira: columna centrada.
+const WIDE = { width: '100%', maxWidth: 640, alignSelf: 'center' } as const;
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
   header: {
@@ -101,9 +110,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: S.pad + 4,
     paddingTop: 8,
     paddingBottom: 4,
+    ...WIDE,
   },
   brand: { fontFamily: mono, fontSize: 12, letterSpacing: 3, color: C.accentSoft },
-  content: { padding: S.pad, gap: S.gap, paddingBottom: 40 },
+  content: { padding: S.pad, gap: S.gap, paddingBottom: 40, ...WIDE },
+  // Pantallas que aprovechan el ancho en computadora/iPad (p. ej. el calendario).
+  wide: { maxWidth: 1200 },
   title: { fontSize: 30, fontWeight: '800', color: C.text, letterSpacing: -0.5 },
   label: { fontFamily: mono, fontSize: 10.5, letterSpacing: 2, color: C.muted, textTransform: 'uppercase' },
   card: {

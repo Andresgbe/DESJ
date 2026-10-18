@@ -3,7 +3,9 @@ import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { HudRing, Label, Title } from '@/components/ui';
+import { DesjCore } from '@/components/desj-core';
+import { NeuralBackground } from '@/components/neural-bg';
+import { Label, Title } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { C } from '@/theme';
 
@@ -23,9 +25,10 @@ export function Login() {
 
   return (
     <SafeAreaView style={styles.screen}>
+      <NeuralBackground />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.body}>
         <View style={{ alignItems: 'center', marginBottom: 8 }}>
-          <HudRing size={150} big="DESJ" small="ACCESO" />
+          <DesjCore size={200} label="ACCESO" />
         </View>
         <Title accent="DESJ">Entra a</Title>
         <Label>Tu contexto es privado: solo tú lo ves.</Label>
@@ -64,7 +67,7 @@ export function Login() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
   body: { flex: 1, justifyContent: 'center', padding: 20, gap: 12 },
-  input: { color: C.text, fontSize: 16, borderWidth: 1, borderColor: C.cardBorder, borderRadius: 12, paddingHorizontal: 14, minHeight: 48, backgroundColor: '#0C0817' },
+  input: { color: C.text, fontSize: 16, borderWidth: 1, borderColor: C.cardBorder, borderRadius: 12, paddingHorizontal: 14, minHeight: 48, backgroundColor: C.surfaceSunken },
   error: { color: C.bad, fontSize: 13.5 },
   btn: { minHeight: 50, borderRadius: 14, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   btnText: { color: C.onAccent, fontSize: 15.5, fontWeight: '700' },

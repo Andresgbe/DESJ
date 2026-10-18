@@ -14,6 +14,17 @@ create table public.profiles (
   updated_at timestamptz not null default now()
 );
 
+-- Conocimiento: archivos Markdown fijos por persona (perfil, salud, negocios, preferencias).
+-- DESJ los lee completos antes de cada respuesta y los reescribe durante la entrevista de Conocimiento.
+create table public.knowledge (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  slug text not null check (slug in ('perfil', 'salud', 'negocios', 'preferencias')),
+  content text not null default '' check (length(content) <= 20000),
+  updated_at timestamptz not null default now(),
+  unique (user_id, slug)
+);
+
 -- Memoria: hechos que DESJ va aprendiendo en las conversaciones (o que el usuario carga a mano).
 -- `embedding` queda listo para búsqueda semántica (fase 2); por ahora puede ir vacío.
 create table public.memories (
@@ -27,10 +38,22 @@ create table public.memories (
   created_at timestamptz not null default now()
 );
 
--- Historial del chat.
+-- Historial del chat: varias conversaciones por usuario, cada una con sus mensajes.
+-- La memoria (tabla memories) es común a todas las conversaciones de la persona.
+create table public.conversations (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  title text not null default 'Nueva conversación' check (length(title) between 1 and 120),
+  -- 'chat' = conversaciones normales; 'conocimiento' = entrevistas para llenar los archivos de conocimiento.
+  kind text not null default 'chat' check (kind in ('chat', 'conocimiento')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table public.messages (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  conversation_id uuid not null references public.conversations (id) on delete cascade,
   role text not null check (role in ('user', 'assistant')),
   content text not null,
   created_at timestamptz not null default now()
@@ -69,6 +92,18 @@ create table public.reminders (
   created_at timestamptz not null default now()
 );
 
+-- Pendientes (tareas). due_date opcional; DESJ puede crearlas y completarlas desde el chat.
+create table public.tasks (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  title text not null check (length(title) between 1 and 300),
+  notes text not null default '',
+  due_date date,
+  done boolean not null default false,
+  done_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
 -- Archivos de contexto (exámenes, documentos legales, etc.). El binario va en Storage.
 create table public.documents (
   id uuid primary key default gen_random_uuid(),
@@ -81,20 +116,26 @@ create table public.documents (
 );
 
 create index on public.memories (user_id, created_at desc);
+create index on public.conversations (user_id, kind, updated_at desc);
 create index on public.messages (user_id, created_at desc);
+create index on public.messages (conversation_id, created_at);
 create index on public.meds (user_id);
 create index on public.med_intakes (user_id, day);
 create index on public.med_intakes (med_id);
 create index on public.reminders (user_id, due_at);
+create index on public.tasks (user_id, done, due_date);
 create index on public.documents (user_id, created_at desc);
 
 -- RLS: cada quien solo lo suyo.
 alter table public.profiles enable row level security;
 alter table public.memories enable row level security;
+alter table public.conversations enable row level security;
+alter table public.knowledge enable row level security;
 alter table public.messages enable row level security;
 alter table public.meds enable row level security;
 alter table public.med_intakes enable row level security;
 alter table public.reminders enable row level security;
+alter table public.tasks enable row level security;
 alter table public.documents enable row level security;
 
 create policy "perfil propio: leer" on public.profiles for select to authenticated using (id = (select auth.uid()));
@@ -104,7 +145,7 @@ create policy "perfil propio: editar" on public.profiles for update to authentic
 do $$
 declare t text;
 begin
-  foreach t in array array['memories', 'messages', 'meds', 'med_intakes', 'reminders', 'documents'] loop
+  foreach t in array array['conversations', 'knowledge', 'memories', 'messages', 'meds', 'med_intakes', 'reminders', 'tasks', 'documents'] loop
     execute format('create policy "propio: leer" on public.%I for select to authenticated using (user_id = (select auth.uid()))', t);
     execute format('create policy "propio: crear" on public.%I for insert to authenticated with check (user_id = (select auth.uid()))', t);
     execute format('create policy "propio: editar" on public.%I for update to authenticated using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()))', t);
@@ -124,6 +165,19 @@ end $$;
 
 create trigger med_intakes_owner before insert or update on public.med_intakes
   for each row execute function public.check_intake_owner();
+
+-- Un mensaje solo puede ir en una conversación del mismo usuario.
+create or replace function public.check_message_owner() returns trigger
+language plpgsql security invoker set search_path = '' as $$
+begin
+  if not exists (select 1 from public.conversations c where c.id = new.conversation_id and c.user_id = new.user_id) then
+    raise exception 'conversación no encontrada';
+  end if;
+  return new;
+end $$;
+
+create trigger messages_owner before insert or update on public.messages
+  for each row execute function public.check_message_owner();
 
 -- Al registrarse un usuario se crea su perfil vacío.
 create or replace function public.handle_new_user() returns trigger
@@ -149,3 +203,9 @@ create policy "documentos propios: subir" on storage.objects for insert to authe
   with check (bucket_id = 'documentos' and (storage.foldername(name))[1] = (select auth.uid())::text);
 create policy "documentos propios: borrar" on storage.objects for delete to authenticated
   using (bucket_id = 'documentos' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+-- Perfiles para los usuarios que ya existían antes de esta migración (el trigger solo cubre los nuevos).
+insert into public.profiles (id, display_name)
+select u.id, coalesce(u.raw_user_meta_data ->> 'display_name', split_part(u.email, '@', 1))
+from auth.users u
+on conflict (id) do nothing;

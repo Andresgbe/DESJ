@@ -1,0 +1,15 @@
+{
+  "name": "desj-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Responde el chat de DESJ con Claude Code (suscripción) en el computador de Andrés",
+  "scripts": {
+    "worker": "node --no-warnings worker.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.3.1",
+    "@supabase/supabase-js": "^2.117.2",
+    "dotenv": "^17.2.3"
+  }
+}

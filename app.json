@@ -43,6 +43,20 @@
         {
           "calendarPermission": "DESJ usa tu calendario para mostrarte la agenda del día y agendar lo que le pidas."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "DESJ usa tus fotos solo cuando eliges una para enviarla en el chat.",
+          "cameraPermission": "DESJ usa la cámara para que le envíes fotos de documentos o exámenes."
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "DESJ usa el micrófono para que le dictes mensajes.",
+          "speechRecognitionPermission": "DESJ convierte tu voz en texto en el teléfono para escribir tus mensajes."
+        }
       ]
     ],
     "experiments": {

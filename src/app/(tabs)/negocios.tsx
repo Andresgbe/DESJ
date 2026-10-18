@@ -10,7 +10,7 @@ function Soon() {
 
 export default function Negocios() {
   return (
-    <Screen module="Módulo · Negocios">
+    <Screen module="Módulo 04 · Negocios">
       <Title accent="negocios">Tus</Title>
 
       <Card>
@@ -54,5 +54,5 @@ const styles = StyleSheet.create({
   item: { color: C.text, fontSize: 14.5, flex: 1, lineHeight: 20 },
   muted: { color: C.muted, fontSize: 12 },
   soon: { fontFamily: mono, fontSize: 10, letterSpacing: 1, color: C.warn },
-  stat: { flex: 1, backgroundColor: '#0C0817', borderRadius: 12, padding: 10, gap: 2, borderWidth: 1, borderColor: C.cardBorder },
+  stat: { flex: 1, backgroundColor: C.surfaceSunken, borderRadius: 12, padding: 10, gap: 2, borderWidth: 1, borderColor: C.cardBorder },
 });

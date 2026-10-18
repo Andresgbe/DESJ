@@ -3,6 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { IconCheck } from '@/components/icons';
 import { Card, HudRing, Label, Mono, Row, Screen, Title } from '@/components/ui';
 import { hhmm, today, useStore } from '@/lib/store';
 import { C } from '@/theme';
@@ -32,7 +33,7 @@ export default function Salud() {
   };
 
   return (
-    <Screen module="Módulo 04 · Salud">
+    <Screen module="Módulo 03 · Salud">
       <Row>
         <View style={{ gap: 2, flex: 1 }}>
           <Title accent="hoy">Tu plan de</Title>
@@ -54,7 +55,8 @@ export default function Salud() {
               <Pressable
                 onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); toggleTaken(m.id); }}
                 style={[styles.btn, t ? styles.btnDone : styles.btnTodo]}>
-                <Text style={[styles.btnText, { color: t ? C.ok : C.onAccent }]}>{t ? '✓ Tomada' : 'Marcar'}</Text>
+                {t ? <IconCheck color={C.ok} size={15} /> : null}
+                <Text style={[styles.btnText, { color: t ? C.ok : C.onAccent }]}>{t ? 'Tomada' : 'Marcar'}</Text>
               </Pressable>
             </Card>
           </Pressable>
@@ -74,7 +76,7 @@ export default function Salud() {
         </Card>
       ) : (
         <Pressable onPress={() => setAdding(true)} style={[styles.wide, styles.outline]}>
-          <Text style={[styles.btnText, { color: '#E9DDFF' }]}>+ Agregar medicamento</Text>
+          <Text style={[styles.btnText, { color: C.chipText }]}>+ Agregar medicamento</Text>
         </Pressable>
       )}
 
@@ -94,11 +96,11 @@ export default function Salud() {
 const styles = StyleSheet.create({
   name: { color: C.text, fontSize: 15, fontWeight: '600' },
   dose: { color: C.muted, fontSize: 12.5 },
-  btn: { minWidth: 92, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  btn: { minWidth: 92, height: 44, borderRadius: 22, flexDirection: 'row', gap: 5, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
   btnTodo: { backgroundColor: C.accent },
   btnDone: { borderWidth: 1, borderColor: C.cardBorder },
   btnText: { fontSize: 14, fontWeight: '700' },
   wide: { flex: 1, minHeight: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  outline: { borderWidth: 1, borderColor: C.border, backgroundColor: '#140D24' },
-  input: { color: C.text, fontSize: 15, borderWidth: 1, borderColor: C.cardBorder, borderRadius: 12, paddingHorizontal: 12, minHeight: 44, backgroundColor: '#0C0817' },
+  outline: { borderWidth: 1, borderColor: C.border, backgroundColor: C.surfaceInput },
+  input: { color: C.text, fontSize: 15, borderWidth: 1, borderColor: C.cardBorder, borderRadius: 12, paddingHorizontal: 12, minHeight: 44, backgroundColor: C.surfaceSunken },
 });

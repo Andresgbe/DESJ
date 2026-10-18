@@ -1,5 +1,6 @@
-// Herramientas que Claude puede usar. Todas escriben con el cliente del usuario (RLS),
-// así que nunca pueden tocar datos de otra persona.
+// Herramientas que Claude puede usar. Las usan la Edge Function `chat` (cliente con la sesión del
+// usuario, RLS) y el worker local (desj-worker, clave de servidor). Por eso cada consulta lleva
+// además user_id explícito: así ninguna herramienta puede tocar datos de otra persona en ningún caso.
 import type Anthropic from '@anthropic-ai/sdk';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -8,11 +9,30 @@ export type Actions = {
   events: { title: string; start: string; end: string; notes: string }[];
   medsChanged: boolean;
   intakesChanged: boolean;
+  knowledgeChanged: boolean;
+  tasksChanged: boolean;
 };
+
+export const KNOWLEDGE_FILES = ['perfil', 'salud', 'negocios', 'preferencias'];
 
 const CATEGORIES = ['personal', 'salud', 'negocios', 'preferencia', 'otro'];
 
 export const TOOLS: Anthropic.Tool[] = [
+  {
+    name: 'actualizar_conocimiento',
+    description:
+      'Reescribe completo uno de los archivos Markdown de conocimiento de la persona (perfil, salud, negocios, preferencias). Conserva lo que ya tenía y agrega o corrige lo nuevo.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: {
+        archivo: { type: 'string', enum: KNOWLEDGE_FILES },
+        contenido: { type: 'string', description: 'El archivo completo en Markdown.' },
+      },
+      required: ['archivo', 'contenido'],
+      additionalProperties: false,
+    },
+  },
   {
     name: 'guardar_memoria',
     description:
@@ -74,6 +94,32 @@ export const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'crear_pendiente',
+    description:
+      'Agrega una tarea a la lista de Pendientes de la persona ("anótame…", "tengo que…"). due_date en formato YYYY-MM-DD o cadena vacía si no tiene fecha. Para un aviso a una hora concreta usa crear_recordatorio.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        due_date: { type: 'string', description: 'YYYY-MM-DD o cadena vacía.' },
+      },
+      required: ['title', 'due_date'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'completar_pendiente',
+    description: 'Marca como hecha una tarea de <pendientes>. Usa el id que aparece ahí.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'registrar_toma',
     description: 'Marca como tomado hoy un medicamento de la lista. Usa el id que aparece en <medicamentos>.',
     strict: true,
@@ -109,19 +155,31 @@ export async function runTool(
   db: SupabaseClient,
   name: string,
   input: Input,
-  ctx: { today: string; actions: Actions },
+  ctx: { today: string; actions: Actions; userId: string },
 ): Promise<string> {
   switch (name) {
+    case 'actualizar_conocimiento': {
+      const slug = str(input.archivo);
+      const content = str(input.contenido);
+      if (!KNOWLEDGE_FILES.includes(slug)) throw new Error('archivo desconocido');
+      if (!content || content.length > 20000) throw new Error('contenido vacío o demasiado largo');
+      const { error } = await db
+        .from('knowledge')
+        .upsert({ user_id: ctx.userId, slug, content, updated_at: new Date().toISOString() }, { onConflict: 'user_id,slug' });
+      if (error) throw error;
+      ctx.actions.knowledgeChanged = true;
+      return `${slug}.md actualizado.`;
+    }
     case 'guardar_memoria': {
       const content = str(input.content);
       const category = CATEGORIES.includes(str(input.category)) ? str(input.category) : 'otro';
       if (!content) throw new Error('content vacío');
-      const { data, error } = await db.from('memories').insert({ category, content, source: 'chat' }).select('id').single();
+      const { data, error } = await db.from('memories').insert({ user_id: ctx.userId, category, content, source: 'chat' }).select('id').single();
       if (error) throw error;
       return `Memoria guardada (id ${data.id}).`;
     }
     case 'borrar_memoria': {
-      const { error, count } = await db.from('memories').delete({ count: 'exact' }).eq('id', str(input.id));
+      const { error, count } = await db.from('memories').delete({ count: 'exact' }).eq('id', str(input.id)).eq('user_id', ctx.userId);
       if (error) throw error;
       return count ? 'Memoria borrada.' : 'No encontré esa memoria.';
     }
@@ -132,7 +190,7 @@ export async function runTool(
       if (repeat === 'none' && due.getTime() < Date.now() - 60_000) throw new Error('esa hora ya pasó');
       const { data, error } = await db
         .from('reminders')
-        .insert({ title: str(input.title), body: str(input.body), due_at: due.toISOString(), repeat })
+        .insert({ user_id: ctx.userId, title: str(input.title), body: str(input.body), due_at: due.toISOString(), repeat })
         .select('id, title, body, due_at, repeat')
         .single();
       if (error) throw error;
@@ -147,10 +205,30 @@ export async function runTool(
       ctx.actions.events.push({ title: str(input.title), start: start.toISOString(), end: end.toISOString(), notes: str(input.notes) });
       return 'Evento enviado al calendario del teléfono.';
     }
+    case 'crear_pendiente': {
+      const title = str(input.title);
+      const due = str(input.due_date);
+      if (!title) throw new Error('title vacío');
+      if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) throw new Error('due_date debe ser YYYY-MM-DD');
+      const { error } = await db.from('tasks').insert({ user_id: ctx.userId, title: title.slice(0, 300), due_date: due || null });
+      if (error) throw error;
+      ctx.actions.tasksChanged = true;
+      return `Pendiente agregado${due ? ` para ${due}` : ''}.`;
+    }
+    case 'completar_pendiente': {
+      const { error, count } = await db
+        .from('tasks')
+        .update({ done: true, done_at: new Date().toISOString() }, { count: 'exact' })
+        .eq('id', str(input.id))
+        .eq('user_id', ctx.userId);
+      if (error) throw error;
+      ctx.actions.tasksChanged = true;
+      return count ? 'Pendiente marcado como hecho.' : 'No encontré ese pendiente.';
+    }
     case 'registrar_toma': {
       const { error } = await db
         .from('med_intakes')
-        .upsert({ med_id: str(input.med_id), day: ctx.today }, { onConflict: 'med_id,day', ignoreDuplicates: true });
+        .upsert({ user_id: ctx.userId, med_id: str(input.med_id), day: ctx.today }, { onConflict: 'med_id,day', ignoreDuplicates: true });
       if (error) throw error;
       ctx.actions.intakesChanged = true;
       return 'Toma registrada para hoy.';
@@ -161,7 +239,7 @@ export async function runTool(
       if (!Number.isInteger(hour) || hour < 0 || hour > 23 || !Number.isInteger(minute) || minute < 0 || minute > 59) {
         throw new Error('hora inválida');
       }
-      const { error } = await db.from('meds').insert({ name: str(input.name), dose: str(input.dose), hour, minute });
+      const { error } = await db.from('meds').insert({ user_id: ctx.userId, name: str(input.name), dose: str(input.dose), hour, minute });
       if (error) throw error;
       ctx.actions.medsChanged = true;
       return 'Medicamento agregado.';

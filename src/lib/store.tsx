@@ -16,19 +16,9 @@ export type Med = {
   notifId?: string;
 };
 
-export type Routine = {
-  id: string;
-  when: string;
-  name: string;
-  desc: string;
-  on: boolean;
-  notifId?: string;
-};
-
 type State = {
   meds: Med[];
   taken: Record<string, string[]>; // fecha (YYYY-MM-DD) -> ids de pastillas tomadas
-  routines: Routine[];
 };
 
 const DEFAULT: State = {
@@ -38,11 +28,6 @@ const DEFAULT: State = {
     { id: 'm3', name: 'Vitamina D', dose: '1.000 UI · con cena', hour: 21, minute: 0 },
   ],
   taken: {},
-  routines: [
-    { id: 'r1', when: '07:40', name: 'Resumen del día', desc: 'Pastillas, agenda y alertas', on: false },
-    { id: 'r2', when: '18:00', name: 'Cierre de mercado', desc: 'Oro, plata y materias primas', on: false },
-    { id: 'r3', when: 'LUN 06:30', name: 'Plan de entrenamiento', desc: 'Llega cuando conectemos Garmin', on: false },
-  ],
 };
 
 const LOCAL_KEY = 'desj:v1';
@@ -60,7 +45,6 @@ type Ctx = State & {
   addMed: (m: Omit<Med, 'id'>) => void;
   removeMed: (id: string) => void;
   enableMedReminders: () => Promise<boolean>;
-  toggleRoutine: (id: string) => Promise<void>;
 };
 
 const StoreCtx = createContext<Ctx | null>(null);
@@ -95,7 +79,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // `key` no cambia mientras el provider vive: al cambiar de usuario, el layout lo vuelve a montar.
   useEffect(() => {
     AsyncStorage.getItem(key)
-      .then((raw) => raw && setState((s) => ({ ...s, ...JSON.parse(raw) })))
+      .then((raw) => {
+        if (!raw) return;
+        const { routines, ...saved } = JSON.parse(raw) as Partial<State> & { routines?: { notifId?: string }[] };
+        // La pestaña Rutinas se quitó: se cancelan los avisos diarios que hubieran quedado activos.
+        routines?.forEach((r) => cancel(r.notifId));
+        setState((s) => ({ ...s, ...saved }));
+      })
       .finally(() => setReady(true))
       .then(refresh);
   }, [key, refresh]);
@@ -139,7 +129,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const meds = await Promise.all(
       state.meds.map(async (m) => {
         await cancel(m.notifId);
-        const notifId = await scheduleDaily(`💊 ${m.name}`, `Te toca: ${m.dose}`, m.hour, m.minute);
+        const notifId = await scheduleDaily(`Pastilla: ${m.name}`, `Te toca: ${m.dose}`, m.hour, m.minute);
         return { ...m, notifId };
       }),
     );
@@ -147,22 +137,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return true;
   };
 
-  const toggleRoutine = async (id: string) => {
-    const r = state.routines.find((x) => x.id === id);
-    if (!r) return;
-    let notifId: string | undefined;
-    if (!r.on) {
-      if (!(await askPermission())) return;
-      const match = r.when.match(/^(\d{2}):(\d{2})$/);
-      if (match) notifId = await scheduleDaily(`DESJ · ${r.name}`, r.desc, Number(match[1]), Number(match[2]));
-    } else {
-      await cancel(r.notifId);
-    }
-    setState((s) => ({ ...s, routines: s.routines.map((x) => (x.id === id ? { ...x, on: !x.on, notifId } : x)) }));
-  };
-
   return (
-    <StoreCtx.Provider value={{ ...state, ready, refresh, toggleTaken, addMed, removeMed, enableMedReminders, toggleRoutine }}>
+    <StoreCtx.Provider value={{ ...state, ready, refresh, toggleTaken, addMed, removeMed, enableMedReminders }}>
       {children}
     </StoreCtx.Provider>
   );

@@ -9,13 +9,13 @@
 //   CLAUDE_MODEL       opcional (por defecto claude-sonnet-5)
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import Anthropic from '@anthropic-ai/sdk';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 
-import { SYSTEM_PROMPT } from './prompt.ts';
+import { INTERVIEW_PROMPT, SYSTEM_PROMPT } from './prompt.ts';
+import { loadAttachment, loadContext, makeTitle } from './context.ts';
 import { Actions, runTool, TOOLS } from './tools.ts';
 
 const MODEL = Deno.env.get('CLAUDE_MODEL') ?? 'claude-sonnet-5';
-const HISTORY = 20; // mensajes previos que se reenvían
 const MAX_STEPS = 6; // vueltas máximas de herramientas por mensaje
 
 const cors = {
@@ -43,22 +43,51 @@ Deno.serve(async (req) => {
 
   let message = '';
   let agenda: unknown = null;
+  let conversationId: string | null = null;
+  let mode: 'chat' | 'conocimiento' = 'chat';
+  let attachment: { path: string; name: string; mime: string } | null = null;
   try {
     const body = await req.json();
     message = String(body.message ?? '').trim();
     agenda = body.agenda ?? null;
+    conversationId = typeof body.conversation_id === 'string' && body.conversation_id ? body.conversation_id : null;
+    if (body.mode === 'conocimiento') mode = 'conocimiento';
+    const a = body.attachment;
+    if (a && typeof a.path === 'string' && typeof a.name === 'string' && typeof a.mime === 'string') {
+      attachment = { path: a.path, name: a.name.slice(0, 200), mime: a.mime };
+    }
   } catch {
     // cuerpo inválido: se responde abajo
   }
-  if (!message || message.length > 4000) return json({ error: 'Mensaje vacío o demasiado largo' }, 400);
+  if ((!message && !attachment) || message.length > 4000) return json({ error: 'Mensaje vacío o demasiado largo' }, 400);
 
-  const ctx = await loadContext(db, agenda);
-  const actions: Actions = { reminders: [], events: [], medsChanged: false, intakesChanged: false };
+  // Adjunto: solo de la carpeta del propio usuario (Storage también lo exige por RLS).
+  let fileBlock: Anthropic.ContentBlockParam | null = null;
+  if (attachment) {
+    if (!attachment.path.startsWith(`${auth.user.id}/`)) return json({ error: 'Adjunto no válido' }, 403);
+    const loaded = await loadAttachment(db, attachment);
+    if ('error' in loaded) return json({ error: loaded.error }, 400);
+    fileBlock = loaded.block;
+  }
+  const savedText = attachment ? [message, `[Adjunto: ${attachment.name}]`].filter(Boolean).join('\n') : message;
+
+  // Conversación existente: RLS garantiza que sea del usuario. Si no hay, se crea al guardar.
+  if (conversationId) {
+    const { data: conv } = await db.from('conversations').select('id').eq('id', conversationId).maybeSingle();
+    if (!conv) return json({ error: 'Esa conversación ya no existe.' }, 404);
+  }
+
+  const ctx = await loadContext(db, auth.user.id, agenda, conversationId);
+  const actions: Actions = { reminders: [], events: [], medsChanged: false, intakesChanged: false, knowledgeChanged: false, tasksChanged: false };
   const client = new Anthropic({ apiKey });
 
-  const messages: Anthropic.MessageParam[] = [...ctx.history, { role: 'user', content: message }];
+  const userContent: Anthropic.ContentBlockParam[] | string = fileBlock
+    ? [fileBlock, { type: 'text', text: message || `Te envío "${attachment!.name}". Revísalo y dime lo importante.` }]
+    : message;
+  const messages: Anthropic.MessageParam[] = [...ctx.history, { role: 'user', content: userContent }];
   const system: Anthropic.TextBlockParam[] = [
     { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
+    ...(mode === 'conocimiento' ? [{ type: 'text' as const, text: INTERVIEW_PROMPT, cache_control: { type: 'ephemeral' as const } }] : []),
     { type: 'text', text: ctx.block },
   ];
 
@@ -94,7 +123,7 @@ Deno.serve(async (req) => {
       const results: Anthropic.ToolResultBlockParam[] = await Promise.all(
         toolUses.map(async (t) => {
           try {
-            const out = await runTool(db, t.name, t.input as Record<string, unknown>, { today: ctx.today, actions });
+            const out = await runTool(db, t.name, t.input as Record<string, unknown>, { today: ctx.today, actions, userId: auth.user!.id });
             return { type: 'tool_result' as const, tool_use_id: t.id, content: out };
           } catch (e) {
             return { type: 'tool_result' as const, tool_use_id: t.id, content: `Error: ${errorText(e)}`, is_error: true };
@@ -113,92 +142,26 @@ Deno.serve(async (req) => {
 
   if (!reply) reply = 'Listo.';
 
-  const { error: saveError } = await db.from('messages').insert([
-    { role: 'user', content: message },
-    { role: 'assistant', content: reply },
-  ]);
-  if (saveError) console.error('guardar historial', saveError);
+  let title: string | null = null;
+  if (!conversationId) {
+    title = makeTitle(message || attachment?.name || 'Archivo');
+    const { data: conv, error } = await db.from('conversations').insert({ title, kind: mode }).select('id').single();
+    if (error) console.error('crear conversación', error);
+    conversationId = conv?.id ?? null;
+  }
+  if (conversationId) {
+    const [saved, touched] = await Promise.all([
+      db.from('messages').insert([
+        { conversation_id: conversationId, role: 'user', content: savedText },
+        { conversation_id: conversationId, role: 'assistant', content: reply },
+      ]),
+      db.from('conversations').update({ updated_at: new Date().toISOString() }).eq('id', conversationId),
+    ]);
+    if (saved.error || touched.error) console.error('guardar historial', saved.error ?? touched.error);
+  }
 
-  return json({ reply, actions });
+  return json({ reply, actions, conversation_id: conversationId, title });
 });
-
-// `agenda` la manda el teléfono (eventos de hoy de su calendario); null = sin acceso al calendario.
-async function loadContext(db: SupabaseClient, agenda: unknown) {
-  const [profile, memories, meds, reminders, history] = await Promise.all([
-    db.from('profiles').select('display_name, about, timezone').single(),
-    db.from('memories').select('id, category, content, created_at').order('created_at', { ascending: false }).limit(150),
-    db.from('meds').select('id, name, dose, hour, minute').eq('active', true).order('hour').order('minute'),
-    db
-      .from('reminders')
-      .select('title, due_at, repeat')
-      .eq('done', false)
-      .or(`repeat.eq.daily,due_at.gte.${new Date().toISOString()}`)
-      .order('due_at')
-      .limit(20),
-    db.from('messages').select('role, content').order('created_at', { ascending: false }).limit(HISTORY),
-  ]);
-
-  const tz = profile.data?.timezone || 'America/Caracas';
-  const now = new Date();
-  const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(now); // YYYY-MM-DD
-  const nowText = new Intl.DateTimeFormat('es-VE', { timeZone: tz, dateStyle: 'full', timeStyle: 'short' }).format(now);
-  const offset = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' })
-    .formatToParts(now)
-    .find((p) => p.type === 'timeZoneName')?.value.replace('GMT', '') || '+00:00';
-
-  const { data: intakes } = await db.from('med_intakes').select('med_id').eq('day', today);
-  const takenIds = new Set((intakes ?? []).map((i) => i.med_id));
-  const pad = (n: number) => String(n).padStart(2, '0');
-
-  const lines = [
-    '<contexto_usuario>',
-    `Nombre: ${profile.data?.display_name || '[sin nombre]'}`,
-    `Sobre la persona: ${profile.data?.about || '[sin datos todavía]'}`,
-    `Ahora: ${nowText} (zona ${tz}, desfase ${offset}). Hoy es ${today}.`,
-    '',
-    '<memorias>',
-    ...(memories.data ?? []).reverse().map((m) => `- [${m.id}] (${m.category}, ${m.created_at.slice(0, 10)}) ${m.content}`),
-    '</memorias>',
-    '',
-    '<medicamentos>',
-    ...(meds.data ?? []).map(
-      (m) => `- [${m.id}] ${pad(m.hour)}:${pad(m.minute)} ${m.name} · ${m.dose} · ${takenIds.has(m.id) ? 'tomado hoy' : 'pendiente hoy'}`,
-    ),
-    '</medicamentos>',
-    '',
-    '<recordatorios_pendientes>',
-    ...(reminders.data ?? []).map((r) => `- ${r.due_at} ${r.repeat === 'daily' ? '(diario) ' : ''}${r.title}`),
-    '</recordatorios_pendientes>',
-    '',
-    '<agenda_hoy>',
-    ...agendaLines(agenda, tz),
-    '</agenda_hoy>',
-    '</contexto_usuario>',
-  ];
-
-  // El historial viene del más nuevo al más viejo; se invierte y debe empezar con un mensaje del usuario.
-  const rows = (history.data ?? []).reverse();
-  while (rows.length && rows[0].role !== 'user') rows.shift();
-  const historyMsgs: Anthropic.MessageParam[] = rows.map((r) => ({ role: r.role as 'user' | 'assistant', content: r.content }));
-
-  return { block: lines.join('\n'), today, history: historyMsgs };
-}
-
-function agendaLines(agenda: unknown, tz: string): string[] {
-  if (!Array.isArray(agenda)) return ['[sin acceso al calendario del teléfono]'];
-  if (agenda.length === 0) return ['[nada agendado hoy]'];
-  const fmt = new Intl.DateTimeFormat('es-VE', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
-  const time = (v: unknown) => {
-    const d = new Date(String(v ?? ''));
-    return Number.isNaN(d.getTime()) ? '?' : fmt.format(d);
-  };
-  return agenda.slice(0, 30).map((e) => {
-    const ev = (e ?? {}) as Record<string, unknown>;
-    const title = String(ev.title ?? '').slice(0, 200);
-    const where = ev.location ? ` · ${String(ev.location).slice(0, 120)}` : '';
-    return ev.allDay ? `- todo el día: ${title}${where}` : `- ${time(ev.start)} a ${time(ev.end)}: ${title}${where}`;
-  });
-}
 
 function errorText(e: unknown) {
   if (e instanceof Error) return e.message;

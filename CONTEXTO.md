@@ -62,6 +62,7 @@ Encuesta: propósito = *ahorrar tiempo en tareas repetitivas*; tipo = *app o pla
 | Calendario | **Calendario del propio teléfono** con `expo-calendar` (Google Calendar aparece ahí si la cuenta está agregada en el iPhone). $0, sin OAuth. **No funciona en Expo Go** (SDK 57): requiere development build. Google Calendar API (OAuth) queda para cuando el servidor necesite la agenda con la app cerrada. |
 | Usuarios | Por ahora **2 usuarios** (Andrés y Steven). Cada uno tiene su **contexto privado** (perfil, memorias, chat, pastillas, recordatorios) aislado con RLS. Las cuentas se crean desde el panel de Supabase; no hay registro público. |
 | Modelo de Claude | `claude-sonnet-5` por defecto (cambiable con el secreto `CLAUDE_MODEL`). |
+| Cerebro (inicio) | **Worker local con la suscripción de Andrés** (`desj-worker/`, mismo patrón que NEXUS): la app deja el mensaje en cola y Claude Code lo responde en el computador de Andrés. Solo responde con ese computador prendido. Más adelante: API key (créditos) para atender 24/7; se cambia por persona con `profiles.brain` = `api`, sin tocar la app. |
 | Hosting de servidor | Evitar planes gratis que "se duermen" (p. ej. Render free: tarda en despertar). Supabase responde sin ese retraso. |
 
 ## 5. Módulos
@@ -71,6 +72,10 @@ Encuesta: propósito = *ahorrar tiempo en tareas repetitivas*; tipo = *app o pla
 | Núcleo | Saludo, resumen del día, accesos rápidos | 0 ✅ |
 | Chat + voz | Hablar/escribir con DESJ; responde en texto y voz | 0 (demo) → 1 (Claude) |
 | Recordatorios / rutinas | Avisos a su hora; resumen diario 07:40 | 0 ✅ (locales) |
+| Calendario | Mes y día: calendario del iPhone (Apple + Google vía el teléfono), recordatorios de DESJ y pastillas | 1 ✅ (calendario del teléfono requiere development build) |
+| Conocimiento | Archivos Markdown por usuario (perfil, salud, negocios, preferencias) que DESJ lee siempre; entrevista para llenarlos | 1 ✅ (guiada sin nube; con Claude al conectar) |
+| Pendientes | Lista de tareas por usuario (reemplaza la pestaña Rutinas) | 1 ✅ |
+| Historial de chats | Varias conversaciones por usuario; la memoria es común a todas | 1 ✅ |
 | Salud · medicamentos | Plan diario, marcar tomadas, avisos diarios | 0 ✅ |
 | Salud · exámenes | Subir PDF/foto, extraer valores, comparar con rango y exámenes previos, preguntas para el médico | 2 |
 | Salud · Garmin | Sueño, FC reposo, pasos, entrenos vía Apple Health | 2 |
@@ -107,21 +112,33 @@ iPhone (app DESJ, Expo)
 
 ```
 src/
-  app/                 ← cada archivo es una pantalla (Expo Router)
-    _layout.tsx        ← 5 pestañas: Núcleo, Chat, Salud, Negocios, Rutinas
-    index.tsx          ← Núcleo: saludo por hora, anillo HUD, resumen
-    chat.tsx           ← Chat; responde en voz (expo-speech), VOZ ON/OFF
-    salud.tsx          ← Pastillas: marcar, agregar, quitar (long-press), recordatorios diarios
-    negocios.tsx       ← Ganadería, legal, mercado (datos de EJEMPLO)
-    rutinas.tsx        ← Interruptores que programan avisos diarios
+  app/                     ← cada archivo es una pantalla (Expo Router)
+    _layout.tsx            ← raíz: sesión, datos, pila (Stack) con las pestañas y las pantallas del menú de perfil
+    (tabs)/_layout.tsx     ← 5 pestañas: Núcleo, Calendario, Salud, Negocios, Pendientes
+    (tabs)/index.tsx       ← Núcleo: saludo, HUD animado, estado del día y el chat con DESJ (con historial)
+    (tabs)/calendario.tsx  ← mes + día: calendario del teléfono, recordatorios de DESJ y pastillas; agregar
+    (tabs)/salud.tsx       ← pastillas: marcar, agregar, quitar, recordatorios diarios
+    (tabs)/negocios.tsx    ← ganadería, legal, mercado (datos de EJEMPLO)
+    (tabs)/pendientes.tsx  ← tareas por hacer (Atrasados, Hoy, Próximos, Sin fecha, Hechos); DESJ las crea/completa
+    conocimiento.tsx       ← entrevista + archivos Markdown que DESJ lee antes de cada respuesta
+    ajustes.tsx            ← cuenta, permisos, versión, cerrar sesión
   components/
-    ui.tsx             ← Screen, Card, Title, Label, Mono, Row, HudRing
-    icons.tsx          ← íconos SVG de las pestañas
+    ui.tsx                 ← Screen (header con círculo de perfil), Card, Title, Label, Mono, Row, HudRing
+    desj-core.tsx          ← HUD animado de DESJ
+    chat-panel.tsx         ← conversación (texto + voz) · chat-history.tsx ← hoja de historial
+    profile-menu.tsx       ← círculo de perfil y menú desplegable
+    login.tsx, icons.tsx
   lib/
-    store.tsx          ← estado global en AsyncStorage (meds, tomas por día, rutinas)
-    notifications.ts   ← permisos y avisos locales (diarios / una vez)
-    brain.ts           ← cerebro DEMO por reglas (será reemplazado por Claude)
-  theme.ts             ← colores y fuente mono
+    store.tsx              ← pastillas, tomas y rutinas (local o Supabase)
+    chats.tsx              ← historial de conversaciones (local o Supabase)
+    knowledge.ts           ← archivos de conocimiento + entrevista guiada sin nube
+    reminders.ts           ← registro de recordatorios de DESJ (notificaciones locales)
+    brain.ts               ← askDesj() (Edge Function) y think() (reglas, modo demo)
+    calendar.ts, notifications.ts, supabase.ts, auth.tsx, confirm.ts
+  theme.ts                 ← C, S, R: se arman desde design/tokens.json
+design/
+  tokens.json              ← copia exacta de los tokens del Design System (https://claude.ai/artifact/7CsREDLrakrXsKvdy7WDVu)
+  README.md                ← cómo sincronizar
 ```
 
 Fase 1 (código listo, falta desplegar):
@@ -142,6 +159,8 @@ supabase/functions/chat/   ← Edge Function: contexto del usuario + Claude con 
 - Los medicamentos de ejemplo del modo demo (Omega 3, Magnesio, Vitamina D) son **ficticios**.
 
 ## 9. Diseño (estética HUD morada)
+
+**Fuente oficial: el Design System de DESJ** (https://claude.ai/artifact/7CsREDLrakrXsKvdy7WDVu). La app lee sus tokens desde `design/tokens.json`. La tabla de abajo es un resumen.
 
 Inspirada en el carrusel de Adrián: fondo casi negro con puntos, anillos concéntricos, etiquetas en mayúsculas monoespaciadas ("MÓDULO 04 · SALUD"), una palabra del título resaltada en lila.
 

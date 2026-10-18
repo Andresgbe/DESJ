@@ -3,7 +3,7 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
 
-export type AgendaItem = { title: string; start: string; end: string; allDay: boolean; location: string | null };
+export type AgendaItem = { title: string; start: string; end: string; allDay: boolean; location: string | null; color?: string };
 
 export const calendarAvailable =
   Platform.OS !== 'web' && Constants.executionEnvironment !== ExecutionEnvironment.StoreClient;
@@ -18,19 +18,17 @@ async function granted() {
   return status === 'granted';
 }
 
-/** Eventos de hoy de todos los calendarios del teléfono, ordenados por hora. null = sin acceso. */
-export async function getTodayAgenda(): Promise<AgendaItem[] | null> {
+/** Eventos de todos los calendarios del teléfono entre dos fechas, ordenados. null = sin acceso. */
+export async function getEvents(start: Date, end: Date): Promise<AgendaItem[] | null> {
   if (!(await granted())) return null;
   const Calendar = lib();
   const calendars = await Calendar.getCalendars(Calendar.EntityTypes.EVENT);
   if (!calendars.length) return [];
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
   const events = await Calendar.listEvents(calendars, start, end);
+  const colors = new Map(calendars.map((c) => [c.id, c.color]));
   return events
     .map((e) => ({
+      color: colors.get(e.calendarId),
       title: e.title || '(sin título)',
       start: new Date(e.startDate).toISOString(),
       end: new Date(e.endDate).toISOString(),
@@ -38,6 +36,15 @@ export async function getTodayAgenda(): Promise<AgendaItem[] | null> {
       location: e.location,
     }))
     .sort((a, b) => Number(b.allDay) - Number(a.allDay) || a.start.localeCompare(b.start));
+}
+
+/** Eventos de hoy. null = sin acceso. */
+export async function getTodayAgenda(): Promise<AgendaItem[] | null> {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return getEvents(start, end);
 }
 
 /** Crea un evento en el calendario principal del teléfono. Devuelve false si no hay acceso. */
