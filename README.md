@@ -6,9 +6,10 @@ App nativa para iPhone (y Android) hecha con **Expo + React Native**. Si sabes R
 
 | Pestaña | Qué hace |
 |---|---|
-| Núcleo | Saludo según la hora, anillo HUD, resumen del día |
+| Núcleo | El cerebro de DESJ (red neuronal 3D) y el botón "Hablar con DESJ", que abre la conversación |
 | Chat | Chat con DESJ en modo demo, **responde en voz** (botón VOZ ON/OFF) |
-| Salud | Pastillas del día: marcar tomadas, agregar/quitar, **recordatorios diarios reales** |
+| YO | Armadura holográfica que gira con tus datos (altura, peso, IMC, edad, sangre); adentro: Salud y Plan físico |
+| YO · Salud | Pastillas del día: marcar tomadas, agregar/quitar, **recordatorios diarios reales** |
 | Negocios | Ganadería, legal y mercado con datos de ejemplo |
 | Rutinas | Interruptores que programan avisos diarios (ej. resumen 07:40) |
 
@@ -80,7 +81,7 @@ src/
     _layout.tsx     ← las 5 pestañas de abajo
     index.tsx       ← Núcleo
     chat.tsx        ← Chat + voz
-    salud.tsx       ← Pastillas y recordatorios
+    yo/             ← Módulo YO (armadura + datos) · yo/salud.tsx: pastillas y recordatorios · yo/plan-fisico.tsx
     negocios.tsx
     rutinas.tsx
   components/

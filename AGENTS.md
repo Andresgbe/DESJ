@@ -34,15 +34,15 @@ iPhone app (Expo SDK 57, Expo Router, TypeScript)
 
 ## Design standards
 
-The look is a **dark purple HUD**. Every screen must follow it; when a request conflicts with these rules, say so before building.
+The look is a **dark tech-blue HUD**. Every screen must follow it; when a request conflicts with these rules, say so before building.
 
 **Source of truth: the DESJ Design System** — https://claude.ai/artifact/7CsREDLrakrXsKvdy7WDVu (palette with usage per token, type scale, spacing, radii, component guidelines with previews). Before designing or changing any screen, read its `project/README.md` and `project/tokens.json` with the Artifact tool (`action: "read"`, `path`). `design/tokens.json` is an exact copy of the Design System's `project/tokens.json`, and `src/theme.ts` reads it (`C`, `S`, `R`). To sync after the Design System changes, read its `project/tokens.json` and copy it over `design/tokens.json`; to add a token from the code side, add it to both in the same task, then expose it in `theme.ts`.
 
 - **Tokens only.** Colors, spacing and radii come from `src/theme.ts` (`C`, `S`, `R`, `mono`), which is generated from `design/tokens.json`. No hex values or new fonts in screens (none exist today outside `theme.ts`; keep it that way); add a token first if one is truly missing.
-- **Background:** near-black `C.bg` with, at most, a subtle static dot texture. No busy or animated backgrounds (the animated neural-network background was rejected as off-style).
-- **Signature elements:** concentric rings (the `DesjCore` HUD), uppercase monospaced labels with letter-spacing (`Label`), module tag in the header ("MÓDULO 0X · NOMBRE"), one highlighted word in titles (`Title accent=`).
+- **Background:** near-black `C.bg` with the subtle `NeuralBackground` (2D network) behind every `Screen`.
+- **Signature elements:** the brain (`DesjCore` → `NeuralCore`: a large rotating 3D neural network, one node cluster per module, wireframe core; only on Núcleo and login; Skia on native, `<canvas>` on web, model in `brain-graph.ts`). The Núcleo opens with only the big brain and a "Hablar con DESJ" button; tapping it shrinks the brain and shows the chat. Chat actions (history, new chat, voice, back to DESJ) live in the hamburger menu (`ChatMenu`, passed to `Screen menu=`). No greeting title on the Núcleo. The YO tab (`(tabs)/yo/`, a nested stack) shows a rotating generic holographic suit (`SuitCore`, same performance rules as the brain) with personal stats read via `readField` from perfil.md/salud.md, and holds the personal modules (Salud, Plan físico); inner screens use `Screen back`, uppercase monospaced labels with letter-spacing (`Label`), module tag in the header ("MÓDULO 0X · NOMBRE"), one highlighted word in titles (`Title accent=`).
 - **Surfaces:** `Card` for grouped content; don't put borders, fills and shadows on everything.
-- **Motion:** only where it has a purpose (the HUD, state changes). Use Reanimated (CSS animations or shared values), animate only `transform`/`opacity`, and respect Reduce Motion. No emoji as decoration.
+- **Motion:** only where it has a purpose (the brain, state changes). Every continuous animation must honor `useMotion().still` (`src/lib/motion.tsx`: the header "ANIM ON/OFF" switch, saved per device, plus Reduce Motion) and pause when its screen is not focused. The brain steps at 30 fps. Use Reanimated (CSS animations or shared values), animate only `transform`/`opacity`, and respect Reduce Motion. No emoji as decoration.
 - **Layout:** `Screen` wraps every tab screen (header with profile circle, max-width column on wide screens). Touch targets ≥ 44 pt. Screens must work at phone width and on web.
 - New screens: propose or mock up first when the change is visual and large; confirm before replacing an established pattern.
 

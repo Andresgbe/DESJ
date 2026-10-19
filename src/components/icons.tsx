@@ -102,3 +102,29 @@ export const IconFile = ({ color, size = 16 }: P) => (
     <Path d="M14 3v5h5" />
   </Svg>
 );
+
+export const IconMenu = ({ color, size = 22 }: P) => (
+  <Svg {...base(size, color)}>
+    <Path d="M4 7h16M4 12h16M4 17h10" />
+  </Svg>
+);
+
+export const IconUser = ({ color, size = 22 }: P) => (
+  <Svg {...base(size, color)}>
+    <Circle cx={12} cy={7} r={3.5} />
+    <Path d="M5 21v-2.5A4.5 4.5 0 0 1 9.5 14h5a4.5 4.5 0 0 1 4.5 4.5V21" />
+    <Path d="M12 14v3" />
+  </Svg>
+);
+
+export const IconBack = ({ color, size = 22 }: P) => (
+  <Svg {...base(size, color)}>
+    <Path d="M15 5l-7 7 7 7" />
+  </Svg>
+);
+
+export const IconChevron = ({ color, size = 18 }: P) => (
+  <Svg {...base(size, color)}>
+    <Path d="M9 5l7 7-7 7" />
+  </Svg>
+);

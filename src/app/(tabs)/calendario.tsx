@@ -42,7 +42,7 @@ function monthGrid(month: Date) {
 
 /** Color con transparencia para las etiquetas con hora. */
 function tint(color: string) {
-  return /^#[0-9a-f]{6}$/i.test(color) ? `${color}33` : 'rgba(196,181,253,0.18)';
+  return /^#[0-9a-f]{6}$/i.test(color) ? `${color}33` : 'rgba(143,208,255,0.18)';
 }
 
 export default function Calendario() {

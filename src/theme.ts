@@ -1,4 +1,4 @@
-// Paleta, espaciados y radios de DESJ (estética HUD morada).
+// Paleta, espaciados y radios de DESJ (estética HUD azul tecnología).
 // Los valores salen de design/tokens.json, copia exacta del Design System:
 // https://claude.ai/artifact/7CsREDLrakrXsKvdy7WDVu — no escribas colores ni tamaños a mano en las pantallas.
 import { Platform } from 'react-native';
@@ -50,7 +50,18 @@ export const C = {
   textFaint: color('text-faint'),
   hudCore: color('hud-core'),
   hudCoreFill: color('hud-core-fill'),
+  neuralCore: color('neural-core'),
 };
+
+/** Colores de los grupos del cerebro (NeuralCore), en el mismo orden que CLUSTERS en brain-graph.ts. */
+export const NEURAL = [
+  color('neural-memoria'),
+  color('neural-conocimiento'),
+  color('neural-negocios'),
+  color('neural-salud'),
+  color('neural-pendientes'),
+  color('neural-calendario'),
+];
 
 // Las familias del Design System son pilas CSS; en el teléfono se usa la fuente del sistema y Menlo.
 export const mono = Platform.select({ ios: 'Menlo', default: 'monospace' });

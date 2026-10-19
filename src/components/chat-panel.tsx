@@ -1,4 +1,5 @@
-// Conversación con DESJ: texto, adjuntos (foto / archivo), dictado por voz y respuesta en voz. Vive en el Núcleo.
+// Conversación con DESJ: texto, adjuntos (foto / archivo), dictado por voz y respuesta en voz. Vive en el Núcleo;
+// el historial, la conversación nueva y la voz están en el menú hamburguesa (chat-menu.tsx).
 import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
 import { Image } from 'expo-image';
@@ -6,26 +7,22 @@ import { useRef, useState } from 'react';
 import { Alert, FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
-import { ChatHistory } from '@/components/chat-history';
-import { IconClip, IconClose, IconFile, IconMic, IconPlus, IconStop } from '@/components/icons';
-import { Label } from '@/components/ui';
+import { IconClip, IconClose, IconFile, IconMic, IconStop } from '@/components/icons';
 import { Attachment, pickAttachment } from '@/lib/attachments';
 import { ChatMsg, useChats } from '@/lib/chats';
 import { dictationAvailable, startDictation } from '@/lib/dictation';
 import { C } from '@/theme';
 
-export function ChatPanel() {
-  const { conversations, activeId, messages, busy, send, newChat } = useChats();
+/** `voice`: leer en voz alta las respuestas (se cambia desde el menú hamburguesa). */
+export function ChatPanel({ voice }: { voice: boolean }) {
+  const { messages, busy, send } = useChats();
   const [input, setInput] = useState('');
-  const [voice, setVoice] = useState(true);
-  const [history, setHistory] = useState(false);
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [tray, setTray] = useState(false);
   const [listening, setListening] = useState(false);
   const stopListening = useRef<(() => void) | null>(null);
   const list = useRef<FlatList<ChatMsg>>(null);
 
-  const title = conversations.find((c) => c.id === activeId)?.title ?? 'Nueva conversación';
   const canSend = Boolean(input.trim() || attachment);
 
   const notify = (msg: string) => (Platform.OS === 'web' ? window.alert(msg) : Alert.alert('DESJ', msg));
@@ -77,28 +74,6 @@ export function ChatPanel() {
 
   return (
     <View style={{ flex: 1, gap: 6 }}>
-      <View style={styles.head}>
-        <View style={{ flex: 1 }}>
-          <Label style={{ color: busy ? C.ok : C.muted }}>{busy ? '● DESJ pensando…' : 'Conversación'}</Label>
-          <Text style={styles.title} numberOfLines={1}>{title}</Text>
-        </View>
-        <Pressable onPress={() => setHistory(true)} style={styles.btn} hitSlop={6} accessibilityRole="button" accessibilityLabel="Ver historial de conversaciones">
-          <Label style={{ color: C.accentSoft }}>Historial</Label>
-        </Pressable>
-        <Pressable onPress={newChat} disabled={busy} style={styles.btn} hitSlop={6} accessibilityRole="button" accessibilityLabel="Nueva conversación">
-          <IconPlus color={C.accentSoft} />
-        </Pressable>
-        <Pressable
-          onPress={() => { setVoice(!voice); Speech.stop(); }}
-          style={styles.btn}
-          hitSlop={6}
-          accessibilityRole="switch"
-          accessibilityState={{ checked: voice }}
-          accessibilityLabel="Respuesta en voz">
-          <Label style={{ color: voice ? C.accentSoft : C.muted }}>{voice ? 'Voz on' : 'Voz off'}</Label>
-        </Pressable>
-      </View>
-
       <FlatList
         ref={list}
         style={{ flex: 1 }}
@@ -181,7 +156,6 @@ export function ChatPanel() {
         )}
       </View>
 
-      <ChatHistory visible={history} onClose={() => setHistory(false)} />
     </View>
   );
 }
@@ -195,9 +169,6 @@ function TrayBtn({ label, onPress }: { label: string; onPress: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  head: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  title: { color: C.text, fontSize: 14.5, fontWeight: '600' },
-  btn: { minHeight: 34, minWidth: 34, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: C.cardBorder },
   me: { alignSelf: 'flex-end', maxWidth: '82%', backgroundColor: C.bubbleMe, borderRadius: 16, borderBottomRightRadius: 4, padding: 12 },
   bot: { alignSelf: 'flex-start', maxWidth: '86%', backgroundColor: C.surfaceInput, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 16, borderBottomLeftRadius: 4, padding: 12 },
   msg: { color: C.text, fontSize: 15, lineHeight: 21 },

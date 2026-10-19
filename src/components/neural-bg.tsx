@@ -2,12 +2,13 @@
 // - La red (nodos + conexiones) es un SVG que se dibuja una vez por tamaño de pantalla.
 // - Solo se animan pocos elementos (nodos que laten y señales que viajan por una conexión),
 //   con animaciones CSS de Reanimated sobre opacidad y transform: corren en el hilo de UI.
-// - Con "Reducir movimiento" queda estática. No recibe toques (pointerEvents="none").
+// - Con las animaciones en OFF o "Reducir movimiento" queda estática. No recibe toques (pointerEvents="none").
 import { useMemo } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
-import Animated, { useReducedMotion } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import Svg, { Circle, Defs, Line, RadialGradient, Rect, Stop } from 'react-native-svg';
 
+import { useMotion } from '@/lib/motion';
 import { C } from '@/theme';
 
 const CELL = 120; // un nodo por celda de ~120 px: densidad pareja sin saturar
@@ -85,7 +86,7 @@ const PULSE = {
 
 export function NeuralBackground() {
   const { width, height } = useWindowDimensions();
-  const reduced = useReducedMotion();
+  const { still: reduced } = useMotion();
   const net = useMemo(() => buildNetwork(width, height), [width, height]);
 
   return (
@@ -148,6 +149,6 @@ export function NeuralBackground() {
 }
 
 const styles = StyleSheet.create({
-  pulse: { position: 'absolute', width: 12, height: 12, borderRadius: 6, backgroundColor: 'rgba(168,85,247,0.35)', borderWidth: 1, borderColor: 'rgba(196,181,253,0.6)', opacity: 0 },
+  pulse: { position: 'absolute', width: 12, height: 12, borderRadius: 6, backgroundColor: 'rgba(47,155,255,0.35)', borderWidth: 1, borderColor: 'rgba(143,208,255,0.6)', opacity: 0 },
   signal: { position: 'absolute', width: 4, height: 4, borderRadius: 2, backgroundColor: C.accentSoft, shadowColor: C.accent, shadowOpacity: 1, shadowRadius: 4, opacity: 0 },
 });

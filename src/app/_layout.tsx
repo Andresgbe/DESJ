@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { Login } from '@/components/login';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { ChatsProvider } from '@/lib/chats';
+import { MotionProvider } from '@/lib/motion';
 import { StoreProvider } from '@/lib/store';
 import { cloudEnabled } from '@/lib/supabase';
 import { C, mono } from '@/theme';
@@ -18,12 +19,14 @@ const theme = { ...DarkTheme, colors: { ...DarkTheme.colors, background: C.bg, c
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <ThemeProvider value={theme}>
-        <StatusBar style="light" />
-        <Gate />
-      </ThemeProvider>
-    </AuthProvider>
+    <MotionProvider>
+      <AuthProvider>
+        <ThemeProvider value={theme}>
+          <StatusBar style="light" />
+          <Gate />
+        </ThemeProvider>
+      </AuthProvider>
+    </MotionProvider>
   );
 }
 

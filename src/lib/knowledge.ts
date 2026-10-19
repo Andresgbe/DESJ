@@ -169,3 +169,43 @@ export function firstName(docs: Docs) {
   const m = docs.perfil.content.match(/\*\*Nombre(?: completo)?:\*\*\s*([^\s,]+)/i);
   return m ? m[1] : '';
 }
+
+/**
+ * Valor de un campo "- **Campo:** valor" buscado en salud.md y perfil.md (el primero que aparezca).
+ * Devuelve null si no está o si dice "[pendiente]".
+ */
+export function readField(docs: Docs, labels: string[]) {
+  for (const slug of ['salud', 'perfil'] as Slug[]) {
+    for (const label of labels) {
+      const safe = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const m = docs[slug].content.match(new RegExp(`\\*\\*${safe}:\\*\\*\\s*(.+)$`, 'im'));
+      const value = m?.[1].trim();
+      if (value && !/pendiente/i.test(value)) return value;
+    }
+  }
+  return null;
+}
+
+const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+/** Edad en años a partir de "12/03/1990", "1990-03-12" o "12 de marzo de 1990"; null si no se entiende. */
+export function ageFrom(birth: string | null, now = new Date()) {
+  if (!birth) return null;
+  let d: Date | null = null;
+  const iso = birth.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  const dmy = birth.match(/(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/);
+  const words = birth.toLowerCase().match(/(\d{1,2})\s+de\s+([a-záéíóú]+)\s+(?:de|del)?\s*(\d{4})/);
+  if (iso) d = new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+  else if (dmy) d = new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
+  else if (words && MONTHS.includes(words[2])) d = new Date(Number(words[3]), MONTHS.indexOf(words[2]), Number(words[1]));
+  if (!d || Number.isNaN(d.getTime())) return null;
+  let age = now.getFullYear() - d.getFullYear();
+  if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) age--;
+  return age >= 0 && age < 130 ? age : null;
+}
+
+/** Primer número de un texto ("82,5 kg" → 82.5); null si no hay. */
+export function numberIn(text: string | null) {
+  const m = text?.match(/\d+(?:[.,]\d+)?/);
+  return m ? Number(m[0].replace(',', '.')) : null;
+}

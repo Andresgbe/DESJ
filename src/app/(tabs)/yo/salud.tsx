@@ -1,4 +1,4 @@
-// Pantalla 04 · Salud: plan de pastillas del día, recordatorios y agregar medicamentos.
+// YO · Salud: plan de pastillas del día, recordatorios y agregar medicamentos. Se abre desde el módulo YO.
 import * as Haptics from 'expo-haptics';
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -33,7 +33,7 @@ export default function Salud() {
   };
 
   return (
-    <Screen module="Módulo 03 · Salud">
+    <Screen module="Yo · Salud" back>
       <Row>
         <View style={{ gap: 2, flex: 1 }}>
           <Title accent="hoy">Tu plan de</Title>

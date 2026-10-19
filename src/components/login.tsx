@@ -28,7 +28,7 @@ export function Login() {
       <NeuralBackground />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.body}>
         <View style={{ alignItems: 'center', marginBottom: 8 }}>
-          <DesjCore size={200} label="ACCESO" />
+          <DesjCore size={280} label="ACCESO" />
         </View>
         <Title accent="DESJ">Entra a</Title>
         <Label>Tu contexto es privado: solo tú lo ves.</Label>

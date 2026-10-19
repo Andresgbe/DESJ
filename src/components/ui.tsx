@@ -1,14 +1,21 @@
 // Piezas visuales reutilizables: pantalla, tarjeta, etiquetas y el anillo HUD.
+import { router } from 'expo-router';
 import { ReactNode } from 'react';
-import { ScrollView, StyleSheet, Text, TextProps, View, ViewStyle } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextProps, View, ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg';
 
+import { IconBack } from '@/components/icons';
 import { NeuralBackground } from '@/components/neural-bg';
 import { ProfileButton } from '@/components/profile-menu';
+import { useMotion } from '@/lib/motion';
 import { C, mono, S } from '@/theme';
 
-export function Screen({ module, children, scroll = true, wide = false }: { module: string; children: ReactNode; scroll?: boolean; wide?: boolean }) {
+/**
+ * `menu`: botón extra en el header, a la izquierda del perfil (p. ej. el menú hamburguesa del Núcleo).
+ * `back`: muestra la flecha para volver (pantallas dentro de un módulo, como YO → Salud).
+ */
+export function Screen({ module, children, scroll = true, wide = false, menu, back = false }: { module: string; children: ReactNode; scroll?: boolean; wide?: boolean; menu?: ReactNode; back?: boolean }) {
   const body = scroll ? (
     <ScrollView contentContainerStyle={[styles.content, wide && styles.wide]} keyboardShouldPersistTaps="handled">
       {children}
@@ -20,14 +27,41 @@ export function Screen({ module, children, scroll = true, wide = false }: { modu
     <SafeAreaView style={styles.screen} edges={['top']}>
       <NeuralBackground />
       <View style={[styles.header, wide && styles.wide]}>
-        <Text style={styles.brand}>● DESJ</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Label>{module}</Label>
+        {back ? (
+          <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back} accessibilityRole="button" accessibilityLabel="Volver">
+            <IconBack color={C.accentSoft} size={20} />
+            <Text style={styles.brand}>DESJ</Text>
+          </Pressable>
+        ) : (
+          <Text style={styles.brand}>● DESJ</Text>
+        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
+          <Label numberOfLines={1} style={{ flexShrink: 1 }}>{module}</Label>
+          <MotionToggle />
+          {menu}
           <ProfileButton />
         </View>
       </View>
       {body}
     </SafeAreaView>
+  );
+}
+
+/** Interruptor de animaciones del header: en OFF el cerebro y la red de fondo quedan estáticos. */
+export function MotionToggle() {
+  const { animations, setAnimations } = useMotion();
+  return (
+    <Pressable
+      onPress={() => setAnimations(!animations)}
+      hitSlop={6}
+      style={styles.toggle}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: animations }}
+      accessibilityLabel="Animaciones"
+      accessibilityHint={animations ? "Apágalas para que la app quede estática y consuma menos" : "Enciéndelas para que el cerebro vuelva a girar"}>
+      <View style={[styles.dot, { backgroundColor: animations ? C.accent : C.muted }]} />
+      <Text style={[styles.toggleText, { color: animations ? C.accentSoft : C.muted }]}>{animations ? 'Anim on' : 'Anim off'}</Text>
+    </Pressable>
   );
 }
 
@@ -74,7 +108,7 @@ export function HudRing({ size = 210, big, small, progress }: { size?: number; b
       <Path d="M110 10 A100 100 0 0 1 193 54" stroke={C.accent} strokeWidth={3} strokeLinecap="round" fill="none" />
       <Path d="M50 190 A100 100 0 0 1 18 149" stroke={C.accentSoft} strokeWidth={2} strokeLinecap="round" fill="none" />
       <Circle cx={110} cy={110} r={80} stroke={C.border} strokeWidth={1} strokeDasharray="3 5" fill="none" />
-      <Circle cx={110} cy={110} r={58} stroke={C.hudCore} strokeWidth={1.2} fill="rgba(168,85,247,0.10)" />
+      <Circle cx={110} cy={110} r={58} stroke={C.hudCore} strokeWidth={1.2} fill={C.hudCoreFill} />
       {progress !== undefined && (
         <Circle
           cx={110}
@@ -133,5 +167,9 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 0 },
   },
+  toggle: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 32, paddingHorizontal: 9, borderRadius: 10, borderWidth: 1, borderColor: C.cardBorder },
+  back: { flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: 44, marginLeft: -6 },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  toggleText: { fontFamily: mono, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
 });

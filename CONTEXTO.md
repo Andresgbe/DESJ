@@ -114,18 +114,26 @@ iPhone (app DESJ, Expo)
 src/
   app/                     ← cada archivo es una pantalla (Expo Router)
     _layout.tsx            ← raíz: sesión, datos, pila (Stack) con las pestañas y las pantallas del menú de perfil
-    (tabs)/_layout.tsx     ← 5 pestañas: Núcleo, Calendario, Salud, Negocios, Pendientes
-    (tabs)/index.tsx       ← Núcleo: saludo, HUD animado, estado del día y el chat con DESJ (con historial)
+    (tabs)/_layout.tsx     ← 5 pestañas: Núcleo, Calendario, YO, Negocios, Pendientes
+    (tabs)/index.tsx       ← Núcleo: al entrar solo el cerebro grande + botón "Hablar con DESJ"; al tocarlo el cerebro se achica y aparece el chat, estado del día y el chat con DESJ (con historial)
     (tabs)/calendario.tsx  ← mes + día: calendario del teléfono, recordatorios de DESJ y pastillas; agregar
-    (tabs)/salud.tsx       ← pastillas: marcar, agregar, quitar, recordatorios diarios
+    (tabs)/yo/index.tsx    ← módulo YO: armadura holográfica que gira + altura, peso, IMC, edad, sangre, pastillas; entrada a los módulos personales
+    (tabs)/yo/salud.tsx    ← YO · Salud: pastillas (marcar, agregar, quitar, recordatorios diarios)
+    (tabs)/yo/plan-fisico.tsx ← YO · Plan físico: objetivo de salud; rutina y avance [pendiente]
     (tabs)/negocios.tsx    ← ganadería, legal, mercado (datos de EJEMPLO)
     (tabs)/pendientes.tsx  ← tareas por hacer (Atrasados, Hoy, Próximos, Sin fecha, Hechos); DESJ las crea/completa
     conocimiento.tsx       ← entrevista + archivos Markdown que DESJ lee antes de cada respuesta
     ajustes.tsx            ← cuenta, permisos, versión, cerrar sesión
   components/
     ui.tsx                 ← Screen (header con círculo de perfil), Card, Title, Label, Mono, Row, HudRing
-    desj-core.tsx          ← HUD animado de DESJ
+    desj-core.tsx          ← DesjCore: el cerebro + línea de estado (D·E·S·J · hora · estado)
+    brain-graph.ts         ← modelo del cerebro: genera la red 3D (grupos = módulos) y proyecta cada cuadro
+    neural-core.tsx        ← dibujo del cerebro con Skia (teléfono) · neural-core.web.tsx ← con <canvas> (web)
+    neural-bg.tsx          ← red 2D sutil de fondo de todas las pantallas
+    suit-graph.ts          ← modelo de la armadura de YO (superficies con anillos y costuras) · suit-core.tsx (Skia) / suit-core.web.tsx (canvas)
     chat-panel.tsx         ← conversación (texto + voz) · chat-history.tsx ← hoja de historial
+    chat-menu.tsx          ← menú hamburguesa del Núcleo: historial, nueva conversación, voz, volver a DESJ
+  lib/motion.tsx           ← interruptor ANIM ON/OFF del header (se guarda en el dispositivo): en OFF todo queda estático
     profile-menu.tsx       ← círculo de perfil y menú desplegable
     login.tsx, icons.tsx
   lib/
@@ -158,23 +166,32 @@ supabase/functions/chat/   ← Edge Function: contexto del usuario + Claude con 
 - El contexto "se va alimentando": Claude guarda memorias solo cuando aprende algo duradero. También se pueden cargar a mano en la tabla `memories` (source `manual`) o en `profiles.about`.
 - Los medicamentos de ejemplo del modo demo (Omega 3, Magnesio, Vitamina D) son **ficticios**.
 
-## 9. Diseño (estética HUD morada)
+## 9. Diseño (estética HUD azul tecnología)
 
 **Fuente oficial: el Design System de DESJ** (https://claude.ai/artifact/7CsREDLrakrXsKvdy7WDVu). La app lee sus tokens desde `design/tokens.json`. La tabla de abajo es un resumen.
 
-Inspirada en el carrusel de Adrián: fondo casi negro con puntos, anillos concéntricos, etiquetas en mayúsculas monoespaciadas ("MÓDULO 04 · SALUD"), una palabra del título resaltada en lila.
+Inspirada en el carrusel de Adrián y en los grafos tipo "Jarvis": fondo casi negro azulado, el **cerebro** (una red neuronal 3D grande que gira, con un grupo de nodos por módulo, conexiones, señales que viajan y una esfera de alambre en el centro), etiquetas en mayúsculas monoespaciadas ("MÓDULO 04 · SALUD") y una palabra del título resaltada en azul.
+
+**Decisión (18 oct 2026):** el HUD de anillos concéntricos se reemplazó por el cerebro. Se dibuja con `@shopify/react-native-skia` en el teléfono (viene en Expo Go) y con `<canvas>` en web. Cuando DESJ piensa, el cerebro acelera, salen más señales y el núcleo brilla más.
+
+**Núcleo (18 oct 2026):** sin saludo ni fecha. Al entrar solo se ve DESJ grande y centrado con el botón **HABLAR CON DESJ**; al tocarlo el cerebro se achica y sube (450 ms) y aparece la conversación. Historial, conversación nueva, voz y "Volver a DESJ" están en el menú hamburguesa del header.
+
+**Módulo YO (18 oct 2026):** la pestaña Salud se reemplazó por **YO**. Muestra una armadura holográfica genérica que gira (inspirada en la referencia; no es el modelo de Iron Man, que es de Marvel) con tus datos a los lados, leídos de perfil.md y salud.md con el formato `- **Campo:** valor` (Talla, Peso, Tipo de sangre, Fecha de nacimiento o Edad). Adentro viven los módulos personales: Salud, Plan físico y Tus datos.
+
+**Rendimiento (18 oct 2026):** botón **ANIM ON/OFF** en el header de todas las pantallas; en OFF el cerebro y la red de fondo se dibujan una vez y quedan quietos (0 % de CPU). Con animaciones, el cerebro avanza a 30 cuadros por segundo y se pausa cuando el Núcleo no está a la vista. Medido en Chrome sin GPU: ~29 % de un núcleo en ON (casi todo es pintar píxeles; el cálculo es ~3 %), 0 % en OFF; la memoria casi no cambia (~20 MB).
 
 | Token | Color | Uso |
 |---|---|---|
-| `bg` | `#07050D` | fondo |
-| `card` | `#120C1F` | tarjetas |
-| `cardBorder` | `#2B2142` | bordes |
-| `border` | `#4C3780` | bordes destacados |
-| `accent` | `#A855F7` | botones principales, anillos |
-| `accentSoft` | `#C4B5FD` | links, horas |
-| `accentText` | `#C9A7FF` | palabra resaltada del título |
-| `text` | `#F1EAFE` | texto |
-| `muted` | `#A99BC4` | texto secundario |
+| `bg` | `#03070F` | fondo |
+| `card` | `#08132A` | tarjetas |
+| `cardBorder` | `#15294D` | bordes |
+| `border` | `#2763B8` | bordes destacados |
+| `accent` | `#2F9BFF` | botones principales, día de hoy |
+| `neural-*` | azules, cian, índigo, verde azulado | grupos del cerebro (solo ahí) |
+| `accentSoft` | `#8FD0FF` | links, horas |
+| `accentText` | `#5CC2FF` | palabra resaltada del título |
+| `text` | `#E6F2FF` | texto |
+| `muted` | `#8AA3C4` | texto secundario |
 | `ok` / `warn` / `bad` | `#6EE7B7` / `#F5B451` / `#FB7185` | estados |
 
 Mockups de referencia (10 pantallas + 4 propuestas de la vista de salud: A Puntaje, B Línea del día, C Voz primero, D Monitor). Recomendado: **C como principal de salud y B como segunda pestaña**.
