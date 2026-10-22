@@ -64,6 +64,7 @@ Encuesta: propósito = *ahorrar tiempo en tareas repetitivas*; tipo = *app o pla
 | Modelo de Claude | `claude-sonnet-5` por defecto (cambiable con el secreto `CLAUDE_MODEL`). |
 | Cerebro (inicio) | **Worker local con la suscripción de Andrés** (`desj-worker/`, mismo patrón que NEXUS): la app deja el mensaje en cola y Claude Code lo responde en el computador de Andrés. Solo responde con ese computador prendido. Más adelante: API key (créditos) para atender 24/7; se cambia por persona con `profiles.brain` = `api`, sin tocar la app. |
 | Hosting de servidor | Evitar planes gratis que "se duermen" (p. ej. Render free: tarda en despertar). Supabase responde sin ese retraso. |
+| Instalar en iPhone gratis (22 oct 2026) | Mientras no se pague Apple Developer (99 USD/año), Steven usa la **versión web instalable** (PWA): se publica en **EAS Hosting** (plan gratis) y en Safari se agrega con Compartir → "Agregar a pantalla de inicio". Sin vencimiento y sin el PC de Andrés (salvo el cerebro `worker`). En web no hay calendario del teléfono, dictado nativo ni recordatorios locales confiables. Con la cuenta pagada se pasa a EAS Build + TestFlight. |
 
 ## 5. Módulos
 
@@ -77,7 +78,10 @@ Encuesta: propósito = *ahorrar tiempo en tareas repetitivas*; tipo = *app o pla
 | Pendientes | Lista de tareas por usuario (reemplaza la pestaña Rutinas) | 1 ✅ |
 | Historial de chats | Varias conversaciones por usuario; la memoria es común a todas | 1 ✅ |
 | Salud · medicamentos | Plan diario, marcar tomadas, avisos diarios | 0 ✅ |
-| Salud · exámenes | Subir PDF/foto, extraer valores, comparar con rango y exámenes previos, preguntas para el médico | 2 |
+| Salud · exámenes y contactos | YO · Salud: exámenes con fotos/PDF en línea de tiempo por la fecha en que se hicieron; contactos (doctores, clínicas, laboratorios). DESJ los ve, lee los archivos (`leer_examen`), anota resultados y guarda exámenes y contactos desde el chat | 1 ✅ |
+| Mis datos | YO · Mis datos: formulario de datos básicos y médicos que escribe en perfil.md y salud.md (se ve en Conocimiento) | 1 ✅ |
+| Finanzas | YO · Finanzas: [pendiente] especificaciones de la vista | 2 |
+| Módulos | Pestaña MÓDULOS: la persona agrega, quita y ordena módulos (Negocios, Vehículo, Hogar, Mascotas, Viajes, Documentos, Otro). Negocios abre su vista; los demás son una bitácora de registros (título, fecha, detalle) que DESJ ve y llena con `agregar_registro_modulo` | 1 ✅ |
 | Salud · Garmin | Sueño, FC reposo, pasos, entrenos vía Apple Health | 2 |
 | Ganadería | Rebaño por lotes, pesajes, vacunas, partos, alertas sanitarias | 2 |
 | Legal (inmuebles y carros) | Responde con base en leyes venezolanas cargadas, cita la fuente, checklists y plantillas | 2 |
@@ -114,13 +118,17 @@ iPhone (app DESJ, Expo)
 src/
   app/                     ← cada archivo es una pantalla (Expo Router)
     _layout.tsx            ← raíz: sesión, datos, pila (Stack) con las pestañas y las pantallas del menú de perfil
-    (tabs)/_layout.tsx     ← 5 pestañas: Núcleo, Calendario, YO, Negocios, Pendientes
+    (tabs)/_layout.tsx     ← 5 pestañas: Núcleo, Calendario, YO, Módulos, Pendientes
     (tabs)/index.tsx       ← Núcleo: al entrar solo el cerebro grande + botón "Hablar con DESJ"; al tocarlo el cerebro se achica y aparece el chat, estado del día y el chat con DESJ (con historial)
     (tabs)/calendario.tsx  ← mes + día: calendario del teléfono, recordatorios de DESJ y pastillas; agregar
     (tabs)/yo/index.tsx    ← módulo YO: armadura holográfica que gira + altura, peso, IMC, edad, sangre, pastillas; entrada a los módulos personales
-    (tabs)/yo/salud.tsx    ← YO · Salud: pastillas (marcar, agregar, quitar, recordatorios diarios)
-    (tabs)/yo/plan-fisico.tsx ← YO · Plan físico: objetivo de salud; rutina y avance [pendiente]
-    (tabs)/negocios.tsx    ← ganadería, legal, mercado (datos de EJEMPLO)
+    (tabs)/yo/salud.tsx    ← YO · Salud: pestañas Pastillas (marcar, agregar, quitar, recordatorios), Exámenes (línea de tiempo por año) y Contactos
+    (tabs)/yo/examen/[id].tsx ← detalle de un examen: datos, archivos (ver, agregar, quitar), editar, borrar
+    (tabs)/yo/mis-datos.tsx ← YO · Mis datos: formulario que escribe en perfil.md / salud.md
+    (tabs)/yo/finanzas.tsx ← YO · Finanzas: [pendiente] (espera el MD de especificaciones)
+    (tabs)/modulos/index.tsx ← MÓDULOS: lista de módulos; agregar, editar, quitar y ordenar
+    (tabs)/modulos/[id].tsx ← bitácora de un módulo (registros con título, fecha y detalle)
+    (tabs)/modulos/negocios.tsx ← ganadería, legal, mercado (datos de EJEMPLO)
     (tabs)/pendientes.tsx  ← tareas por hacer (Atrasados, Hoy, Próximos, Sin fecha, Hechos); DESJ las crea/completa
     conocimiento.tsx       ← entrevista + archivos Markdown que DESJ lee antes de cada respuesta
     ajustes.tsx            ← cuenta, permisos, versión, cerrar sesión
@@ -136,10 +144,16 @@ src/
   lib/motion.tsx           ← interruptor ANIM ON/OFF del header (se guarda en el dispositivo): en OFF todo queda estático
     profile-menu.tsx       ← círculo de perfil y menú desplegable
     login.tsx, icons.tsx
+    form.tsx               ← Field, Choice, Btn: controles de formulario de los módulos
+    health.tsx             ← piezas de Salud: formulario y fila de examen, contactos, selector de archivos
+    modules.tsx            ← ícono por tipo de módulo y formulario de módulo
   lib/
     store.tsx              ← pastillas, tomas y rutinas (local o Supabase)
     chats.tsx              ← historial de conversaciones (local o Supabase)
-    knowledge.ts           ← archivos de conocimiento + entrevista guiada sin nube
+    knowledge.ts           ← archivos de conocimiento + entrevista guiada sin nube; writeField (Mis datos)
+    health.ts              ← exámenes, archivos de exámenes y contactos de salud (local o Supabase)
+    modules.ts             ← módulos y sus registros (local o Supabase)
+    dates.ts               ← fechas DD/MM/AAAA ↔ YYYY-MM-DD, "14 mar 2023", "hace 3 años"
     reminders.ts           ← registro de recordatorios de DESJ (notificaciones locales)
     brain.ts               ← askDesj() (Edge Function) y think() (reglas, modo demo)
     calendar.ts, notifications.ts, supabase.ts, auth.tsx, confirm.ts
@@ -177,6 +191,8 @@ Inspirada en el carrusel de Adrián y en los grafos tipo "Jarvis": fondo casi ne
 **Núcleo (18 oct 2026):** sin saludo ni fecha. Al entrar solo se ve DESJ grande y centrado con el botón **HABLAR CON DESJ**; al tocarlo el cerebro se achica y sube (450 ms) y aparece la conversación. Historial, conversación nueva, voz y "Volver a DESJ" están en el menú hamburguesa del header.
 
 **Módulo YO (18 oct 2026):** la pestaña Salud se reemplazó por **YO**. Muestra una armadura holográfica genérica que gira (inspirada en la referencia; no es el modelo de Iron Man, que es de Marvel) con tus datos a los lados, leídos de perfil.md y salud.md con el formato `- **Campo:** valor` (Talla, Peso, Tipo de sangre, Fecha de nacimiento o Edad). Adentro viven los módulos personales: Salud, Plan físico y Tus datos.
+
+**YO y Módulos (22 oct 2026):** YO tiene tres módulos: **Salud** (pestañas Pastillas, Exámenes y Contactos; los exámenes se ordenan por la fecha en que se hicieron), **Finanzas** ([pendiente] el MD con la vista) y **Mis datos** (formulario que escribe en perfil.md y salud.md sin tocar el resto del archivo; respeta sinónimos como Altura/Talla). Plan físico se quitó. La pestaña Negocios pasó a ser **MÓDULOS**: cada persona arma su lista (tablas `modules` y `module_entries`); Negocios es el primero por defecto. Archivos de exámenes en Storage: `documentos/<usuario>/salud/<examen>/`.
 
 **Rendimiento (18 oct 2026):** botón **ANIM ON/OFF** en el header de todas las pantallas; en OFF el cerebro y la red de fondo se dibujan una vez y quedan quietos (0 % de CPU). Con animaciones, el cerebro avanza a 30 cuadros por segundo y se pausa cuando el Núcleo no está a la vista. Medido en Chrome sin GPU: ~29 % de un núcleo en ON (casi todo es pintar píxeles; el cálculo es ~3 %), 0 % en OFF; la memoria casi no cambia (~20 MB).
 
@@ -230,6 +246,23 @@ npx expo install <pkg> # instalar librerías (NUNCA npm install <pkg>)
 - Expo cambia mucho entre versiones: antes de usar una API, revisar la doc de **SDK 57** (`https://docs.expo.dev/versions/v57.0.0/`). Ver también `AGENTS.md`.
 - Expo Go solo trae sus módulos incluidos. Micrófono (voz a texto), HealthKit y otras librerías nativas requieren **development build** (`eas build --profile development`).
 - No editar carpetas `ios/` ni `android/` a mano (se generan).
+
+### Cerebro en el PC de Andrés (worker)
+
+- Requisitos: Node 24, Claude Code de terminal con sesión iniciada (`irm https://claude.ai/install.ps1 | iex`, luego `claude`) y `desj-worker/.env` con la clave secreta de Supabase (copiar `.env.example`).
+- Arranque automático: `desj-worker\instalar-inicio.ps1` crea la tarea programada "DESJ worker", que corre `start-worker.bat` sin ventana al iniciar sesión en Windows y lo reinicia si se cae. Log: `desj-worker/worker.log`. Para quitarla: `instalar-inicio.ps1 -Quitar`.
+- Solo responde con el PC prendido, con la sesión iniciada y sin suspender.
+
+### Publicar la versión web instalable (iPhone gratis)
+
+```bash
+npx eas-cli@latest login   # una vez
+npm run deploy:web         # exporta a dist/ y publica en producción (EAS Hosting)
+```
+
+- Necesita el `.env` con Supabase: las variables `EXPO_PUBLIC_` quedan dentro del sitio al exportar. El script exporta con `--clear` (Metro guarda esas variables en caché) y corre `scripts/web-index-routes.mjs`, que copia `yo/index.html` como `yo.html`: sin eso, recargar `/yo` o `/modulos` da 404 en EAS Hosting.
+- `src/app/+html.tsx` pone las etiquetas de iOS (pantalla completa, ícono, nombre) y enlaza `public/manifest.json`; los íconos están en `public/`. Hoy son el ícono genérico de Expo: [pendiente] ícono propio de DESJ.
+- En el iPhone: abrir la URL en **Safari** → Compartir → "Agregar a pantalla de inicio".
 
 ### Conectar la nube (una vez)
 

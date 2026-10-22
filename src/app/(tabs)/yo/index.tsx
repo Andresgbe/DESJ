@@ -1,5 +1,5 @@
 // Módulo 03 · YO: tu información personal alrededor de una armadura holográfica que gira, y la
-// entrada a tus módulos personales (Salud, Plan físico, Tus datos). Los datos salen de tus archivos
+// entrada a tus módulos personales (Salud, Finanzas, Mis datos). Los datos salen de tus archivos
 // de conocimiento (perfil.md, salud.md) y de tus pastillas; lo que falta se muestra "[pendiente]".
 import { router, useFocusEffect, type Href } from "expo-router";
 import { useCallback, useState } from "react";
@@ -132,22 +132,22 @@ export default function Yo() {
         title="Salud"
         sub={
           meds.length
-            ? `${tomadas} de ${meds.length} pastillas tomadas hoy · recordatorios`
-            : "Pastillas, dosis y recordatorios"
+            ? `${tomadas} de ${meds.length} pastillas hoy · exámenes y contactos`
+            : "Pastillas, exámenes, doctores y clínicas"
         }
         href="/yo/salud"
       />
       <ModuleRow
         tag="03.2"
-        title="Plan físico"
-        sub="Objetivo, rutina y avance"
-        href="/yo/plan-fisico"
+        title="Finanzas"
+        sub="Tus finanzas personales"
+        href="/yo/finanzas"
       />
       <ModuleRow
         tag="03.3"
-        title="Tus datos"
-        sub="Altura, peso y todo lo que DESJ sabe de ti"
-        href="/conocimiento"
+        title="Mis datos"
+        sub="Nombre, altura, peso, sangre y datos médicos"
+        href="/yo/mis-datos"
       />
     </Screen>
   );

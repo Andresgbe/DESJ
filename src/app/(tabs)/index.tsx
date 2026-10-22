@@ -152,8 +152,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     boxShadow: `0 0 24px ${C.accent}73`,
-    transitionProperty: 'transform',
-    transitionDuration: 120,
   },
   talkPressed: { transform: [{ scale: 0.97 }] },
   talkText: { color: C.onAccent, fontFamily: mono, fontSize: 13, fontWeight: '700', letterSpacing: 3, textTransform: 'uppercase' },

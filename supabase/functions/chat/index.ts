@@ -123,8 +123,15 @@ Deno.serve(async (req) => {
       const results: Anthropic.ToolResultBlockParam[] = await Promise.all(
         toolUses.map(async (t) => {
           try {
-            const out = await runTool(db, t.name, t.input as Record<string, unknown>, { today: ctx.today, actions, userId: auth.user!.id });
-            return { type: 'tool_result' as const, tool_use_id: t.id, content: out };
+            const out = await runTool(db, t.name, t.input as Record<string, unknown>, { today: ctx.today, actions, userId: auth.user!.id, attachment });
+            if (typeof out === 'string') return { type: 'tool_result' as const, tool_use_id: t.id, content: out };
+            // leer_examen: los archivos van dentro del resultado como imagen o documento.
+            const content: Anthropic.ToolResultBlockParam['content'] = [{ type: 'text', text: out.text }];
+            for (const f of out.files) {
+              const loaded = await loadAttachment(db, f);
+              content.push('error' in loaded ? { type: 'text', text: `${f.name}: ${loaded.error}` } : (loaded.block as Anthropic.ImageBlockParam | Anthropic.DocumentBlockParam));
+            }
+            return { type: 'tool_result' as const, tool_use_id: t.id, content };
           } catch (e) {
             return { type: 'tool_result' as const, tool_use_id: t.id, content: `Error: ${errorText(e)}`, is_error: true };
           }

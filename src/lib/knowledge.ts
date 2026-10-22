@@ -136,6 +136,23 @@ export function useKnowledge() {
     return true;
   };
 
+  /** Guarda varios archivos a la vez (Mis datos puede tocar perfil.md y salud.md en un solo guardado). */
+  const saveDocs = async (patch: Partial<Record<Slug, string>>) => {
+    const updatedAt = new Date().toISOString();
+    const slugs = Object.keys(patch) as Slug[];
+    if (!slugs.length) return true;
+    if (cloud) {
+      const rows = slugs.map((slug) => ({ slug, content: patch[slug]!.trim(), updated_at: updatedAt }));
+      const { error } = await supabase.from('knowledge').upsert(rows, { onConflict: 'user_id,slug' });
+      if (error) return false;
+    }
+    const next = { ...docs };
+    for (const slug of slugs) next[slug] = { content: patch[slug]!.trim(), updatedAt };
+    setDocs(next);
+    if (!cloud) await persistLocal(next, skipped);
+    return true;
+  };
+
   /** Entrevista guiada (sin nube): guarda la respuesta o la salta y devuelve la siguiente pregunta. */
   const answerLocal = async (questionId: string, text: string) => {
     const q = QUESTIONS.find((x) => x.id === questionId);
@@ -161,7 +178,7 @@ export function useKnowledge() {
 
   const answered = QUESTIONS.filter((q) => hasField(docs, q.slug, q.label)).length;
 
-  return { cloud, ready, docs, skipped, reload, saveDoc, answerLocal, resetSkipped, progress: { answered, total: QUESTIONS.length } };
+  return { cloud, ready, docs, skipped, reload, saveDoc, saveDocs, answerLocal, resetSkipped, progress: { answered, total: QUESTIONS.length } };
 }
 
 /** Primer nombre según perfil.md ("- **Nombre completo:** Steven …"), o '' si todavía no está. */
@@ -184,6 +201,34 @@ export function readField(docs: Docs, labels: string[]) {
     }
   }
   return null;
+}
+
+const labelLine = (label: string) =>
+  new RegExp(`^.*\\*\\*${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:\\*\\*.*$\\n?`, 'im');
+
+/**
+ * Escribe un campo en el archivo donde ya esté (con cualquiera de sus nombres, p. ej. "Talla" o "Altura");
+ * si no está, lo agrega en `slug` con el primer nombre. Valor vacío = quitar la línea.
+ * Devuelve el contenido nuevo de los archivos que cambiaron.
+ */
+export function writeField(docs: Docs, slug: Slug, labels: string[], value: string): Partial<Record<Slug, string>> {
+  const clean = value.replace(/\s+/g, ' ').trim();
+  for (const s of ['salud', 'perfil'] as Slug[]) {
+    for (const label of labels) {
+      const re = labelLine(label);
+      if (!re.test(docs[s].content)) continue;
+      const next = clean ? docs[s].content.replace(re, (line) => `- **${label}:** ${clean}${line.endsWith('\n') ? '\n' : ''}`) : docs[s].content.replace(re, '');
+      return { [s]: next };
+    }
+  }
+  if (!clean) return {};
+  // Campo nuevo: va justo después del último "- **Campo:** valor" del archivo, no al final (notas, fecha).
+  const content = docs[slug].content;
+  const fields = [...content.matchAll(/^- \*\*[^*]+:\*\*.*$/gm)];
+  const last = fields[fields.length - 1];
+  if (!last || last.index === undefined) return { [slug]: upsertField(content, slug, labels[0], clean) };
+  const at = last.index + last[0].length;
+  return { [slug]: `${content.slice(0, at)}\n- **${labels[0]}:** ${clean}${content.slice(at)}` };
 }
 
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];

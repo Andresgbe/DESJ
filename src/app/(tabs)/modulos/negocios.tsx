@@ -1,4 +1,4 @@
-// Pantalla · Negocios: ganadería, legal y mercado (por ahora con datos de ejemplo).
+// Módulos · Negocios: ganadería, legal y mercado (por ahora con datos de ejemplo). Se abre desde MÓDULOS.
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Card, Label, Mono, Row, Screen, Title } from '@/components/ui';
@@ -10,7 +10,7 @@ function Soon() {
 
 export default function Negocios() {
   return (
-    <Screen module="Módulo 04 · Negocios">
+    <Screen module="Módulos · Negocios" back>
       <Title accent="negocios">Tus</Title>
 
       <Card>

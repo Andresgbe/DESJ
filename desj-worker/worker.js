@@ -49,7 +49,7 @@ const db = createClient(DESJ_SUPABASE_URL, DESJ_SUPABASE_SECRET_KEY, { auth: { p
 const log = (...a) => console.log(new Date().toLocaleTimeString('es-VE'), ...a);
 
 const WORKER_NOTE = `Estás respondiendo desde el chat de la app DESJ. Tus herramientas son las de DESJ (mcp__desj__*): úsalas para actuar sobre los datos de la persona. No tienes terminal ni acceso a otros archivos.
-Si el mensaje trae un archivo adjunto, ábrelo con Read usando la ruta indicada y respóndele sobre su contenido.
+Si el mensaje trae un archivo adjunto, ábrelo con Read usando la ruta indicada y respóndele sobre su contenido. Lo mismo con los archivos que te dé leer_examen.
 Tu respuesta final es exactamente el texto que la persona verá y escuchará: sin markdown, sin comentarios sobre herramientas.`;
 
 // ---------------------------------------------------------------------------
@@ -89,7 +89,8 @@ function runClaude({ cwd, systemFile, mcpFile, withFile, prompt }) {
       '--mcp-config', mcpFile,
       '--strict-mcp-config', // solo el MCP de DESJ: nada de los otros conectores de este computador
       '--setting-sources', 'project', // sin ajustes ni hooks del usuario de Windows
-      '--allowedTools', withFile ? 'mcp__desj__*,Read' : 'mcp__desj__*',
+      // Read: el adjunto del mensaje, o solo la carpeta temporal (archivos que baja leer_examen).
+      '--allowedTools', withFile ? 'mcp__desj__*,Read' : 'mcp__desj__*,Read(./**)',
       '--permission-mode', 'dontAsk', // lo que no está permitido arriba se rechaza solo
     ];
     const child = spawn('claude', args, { cwd, shell: false, windowsHide: true });
@@ -181,7 +182,15 @@ async function handle(msg) {
             type: 'stdio',
             command: process.execPath,
             args: ['--no-warnings', path.join(HERE, 'mcp.js')],
-            env: { DESJ_USER_ID: msg.user_id, DESJ_ACTIONS_FILE: actionsFile, DESJ_TODAY: today },
+            env: {
+              DESJ_USER_ID: msg.user_id,
+              DESJ_ACTIONS_FILE: actionsFile,
+              DESJ_TODAY: today,
+              DESJ_TMP_DIR: dir,
+              ...(msg.attachment_path
+                ? { DESJ_ATTACHMENT: JSON.stringify({ path: msg.attachment_path, name: msg.attachment_name ?? path.basename(msg.attachment_path), mime: msg.attachment_mime ?? 'application/octet-stream' }) }
+                : {}),
+            },
           },
         },
       }),

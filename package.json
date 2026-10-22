@@ -1,7 +1,7 @@
 {
   "name": "desj",
   "main": "expo-router/entry",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "dependencies": {
     "@expo/ui": "~57.0.21",
     "@react-native-async-storage/async-storage": "^2.2.0",
@@ -50,7 +50,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "deploy:web": "expo export -p web --clear && node scripts/web-index-routes.mjs dist && npx eas-cli@latest deploy --prod"
   },
   "private": true
 }

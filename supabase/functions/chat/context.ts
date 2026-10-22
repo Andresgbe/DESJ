@@ -8,10 +8,13 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { KNOWLEDGE_FILES } from './tools.ts';
 
 export const HISTORY = 20; // mensajes previos que se reenvían
+const MAX_EXAMS = 80; // los más recientes por fecha del examen
+const MAX_RESULTS = 800; // caracteres de resultados por examen en el contexto
+const ENTRIES_PER_MODULE = 12; // registros más recientes de cada módulo
 
 // `agenda` la manda el teléfono (eventos de hoy de su calendario); null = sin acceso al calendario.
 export async function loadContext(db: SupabaseClient, userId: string, agenda: unknown, conversationId: string | null) {
-  const [profile, knowledge, memories, meds, reminders, tasks, history] = await Promise.all([
+  const [profile, knowledge, memories, meds, reminders, tasks, exams, examFiles, contacts, modules, entries, history] = await Promise.all([
     db.from('profiles').select('display_name, about, timezone').eq('id', userId).single(),
     db.from('knowledge').select('slug, content, updated_at').eq('user_id', userId),
     db.from('memories').select('id, category, content, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(150),
@@ -25,6 +28,21 @@ export async function loadContext(db: SupabaseClient, userId: string, agenda: un
       .order('due_at')
       .limit(20),
     db.from('tasks').select('id, title, due_date').eq('user_id', userId).eq('done', false).order('due_date', { ascending: true, nullsFirst: false }).limit(50),
+    db
+      .from('health_exams')
+      .select('id, title, exam_date, kind, place, doctor, results, notes')
+      .eq('user_id', userId)
+      .order('exam_date', { ascending: false })
+      .limit(MAX_EXAMS),
+    db.from('health_exam_files').select('exam_id').eq('user_id', userId).limit(2000),
+    db.from('health_contacts').select('id, kind, name, specialty, phone, email, address, notes').eq('user_id', userId).order('name').limit(100),
+    db.from('modules').select('id, kind, name, description').eq('user_id', userId).order('position').limit(50),
+    db
+      .from('module_entries')
+      .select('module_id, title, entry_date, details, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(500),
     conversationId
       ? db.from('messages').select('role, content').eq('user_id', userId).eq('conversation_id', conversationId).eq('status', 'done').order('created_at', { ascending: false }).limit(HISTORY)
       : Promise.resolve({ data: [] as { role: string; content: string }[] }),
@@ -75,6 +93,20 @@ ${doc?.content.trim() || '[vacío: todavía no hay datos]'}
     ...(tasks.data ?? []).map((t) => `- [${t.id}] ${t.due_date ? `(${t.due_date}) ` : ''}${t.title}`),
     '</pendientes>',
     '',
+    '<examenes>',
+    ...examLines(exams.data ?? [], examFiles.data ?? []),
+    '</examenes>',
+    '',
+    '<contactos_salud>',
+    ...(contacts.data ?? []).map((c) =>
+      `- [${c.id}] ${[c.kind, c.name, c.specialty, c.phone && `tel ${c.phone}`, c.email, c.address, c.notes].filter(Boolean).join(' · ')}`,
+    ),
+    '</contactos_salud>',
+    '',
+    '<modulos>',
+    ...moduleLines(modules.data ?? [], entries.data ?? []),
+    '</modulos>',
+    '',
     '<agenda_hoy>',
     ...agendaLines(agenda, tz),
     '</agenda_hoy>',
@@ -87,6 +119,42 @@ ${doc?.content.trim() || '[vacío: todavía no hay datos]'}
   const historyMsgs: Anthropic.MessageParam[] = rows.map((r) => ({ role: r.role as 'user' | 'assistant', content: r.content }));
 
   return { block: lines.join('\n'), today, history: historyMsgs };
+}
+
+type ExamRow = { id: string; title: string; exam_date: string; kind: string; place: string; doctor: string; results: string; notes: string };
+
+/** Exámenes del más reciente al más antiguo (por la fecha en que se hicieron), con sus resultados anotados. */
+function examLines(exams: ExamRow[], files: { exam_id: string }[]): string[] {
+  if (!exams.length) return ['[sin exámenes cargados]'];
+  return exams.flatMap((e) => {
+    const n = files.filter((f) => f.exam_id === e.id).length;
+    const head = `- [${e.id}] ${e.exam_date} · ${e.kind} · ${e.title}${e.place ? ` · ${e.place}` : ''}${e.doctor ? ` · ${e.doctor}` : ''} · ${n ? `${n} archivo${n === 1 ? '' : 's'}` : 'sin archivos'}`;
+    const results = e.results.replace(/\s+/g, ' ').trim();
+    const notes = e.notes.replace(/\s+/g, ' ').trim();
+    return [
+      head,
+      `  resultados: ${results ? results.slice(0, MAX_RESULTS) + (results.length > MAX_RESULTS ? '…' : '') : '[sin anotar]'}`,
+      ...(notes ? [`  notas: ${notes.slice(0, 300)}`] : []),
+    ];
+  });
+}
+
+type ModuleRow = { id: string; kind: string; name: string; description: string };
+type EntryRow = { module_id: string; title: string; entry_date: string | null; details: string; created_at: string };
+
+/** Módulos de la pestaña MÓDULOS con sus registros más recientes (por fecha del registro). */
+function moduleLines(modules: ModuleRow[], entries: EntryRow[]): string[] {
+  if (!modules.length) return ['[sin módulos]'];
+  return modules.flatMap((m) => {
+    const own = entries
+      .filter((e) => e.module_id === m.id)
+      .sort((a, b) => (b.entry_date ?? b.created_at.slice(0, 10)).localeCompare(a.entry_date ?? a.created_at.slice(0, 10)))
+      .slice(0, ENTRIES_PER_MODULE);
+    return [
+      `- [${m.id}] ${m.kind} · ${m.name}${m.description ? ` · ${m.description}` : ''}`,
+      ...own.map((e) => `  · ${e.entry_date ?? 'sin fecha'} ${e.title}${e.details ? `: ${e.details.replace(/\s+/g, ' ').slice(0, 200)}` : ''}`),
+    ];
+  });
 }
 
 export const MAX_FILE = 10 * 1024 * 1024;

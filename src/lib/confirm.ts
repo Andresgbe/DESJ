@@ -1,4 +1,4 @@
-// Confirmación sí/no. En web, Alert de React Native no muestra botones: se usa window.confirm.
+// Confirmación sí/no y avisos. En web, Alert de React Native no muestra nada: se usan window.confirm y window.alert.
 import { Alert, Platform } from 'react-native';
 
 export function confirm(title: string, message: string, action = 'Aceptar'): Promise<boolean> {
@@ -9,4 +9,10 @@ export function confirm(title: string, message: string, action = 'Aceptar'): Pro
       { text: action, style: 'destructive', onPress: () => resolve(true) },
     ]),
   );
+}
+
+/** Aviso con un solo botón. En web, Alert de React Native no se muestra: se usa window.alert. */
+export function notify(message: string, title = 'DESJ') {
+  if (Platform.OS === 'web') window.alert(message);
+  else Alert.alert(title, message);
 }
