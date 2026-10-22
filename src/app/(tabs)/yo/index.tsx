@@ -22,7 +22,7 @@ import {
   readField,
   useKnowledge,
 } from "@/lib/knowledge";
-import { today, useStore } from "@/lib/store";
+import { dosesToday, useStore } from "@/lib/store";
 import { C, mono, S } from "@/theme";
 
 const STAT_W = 86;
@@ -62,9 +62,7 @@ export default function Yo() {
     ageFrom(readField(docs, ["Fecha de nacimiento", "Nacimiento"])) ??
     numberIn(readField(docs, ["Edad"]));
   const sangre = readField(docs, ["Tipo de sangre", "Sangre"]);
-  const tomadas = meds.filter((m) =>
-    (taken[today()] ?? []).includes(m.id),
-  ).length;
+  const { done: tomadas, total: dosis } = dosesToday(meds, taken);
 
   // La figura ocupa el centro entre las dos columnas de datos, sin pasar de la mitad del alto.
   const column = Math.min(width, S.column) - S.pad * 2;
@@ -119,7 +117,7 @@ export default function Yo() {
           <Stat label="Sangre" value={sangre} unit="tipo" right />
           <Stat
             label="Pastillas"
-            value={meds.length ? `${tomadas}/${meds.length}` : null}
+            value={dosis ? `${tomadas}/${dosis}` : null}
             unit="hoy"
             right
           />
@@ -132,7 +130,7 @@ export default function Yo() {
         title="Salud"
         sub={
           meds.length
-            ? `${tomadas} de ${meds.length} pastillas hoy · exámenes y contactos`
+            ? `${tomadas} de ${dosis} dosis hoy · exámenes y contactos`
             : "Pastillas, exámenes, doctores y clínicas"
         }
         href="/yo/salud"

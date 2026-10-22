@@ -11,7 +11,7 @@ import { IconCheck, IconPlus } from '@/components/icons';
 import { Card, HudRing, Label, Mono, Row, Screen, Title } from '@/components/ui';
 import { confirm, notify } from '@/lib/confirm';
 import { Contact, since, useHealth } from '@/lib/health';
-import { hhmm, today, useStore } from '@/lib/store';
+import { doseKey, doseLabel, dosesToday, MAX_DOSES, MedInput, parseTime, today, useStore } from '@/lib/store';
 import { C, R } from '@/theme';
 
 type Tab = 'examenes' | 'pastillas' | 'contactos';
@@ -152,29 +152,17 @@ function Contacts({ health }: { health: Health }) {
 
 function Pills() {
   const { meds, taken, toggleTaken, addMed, removeMed, enableMedReminders } = useStore();
-  const takenIds = taken[today()] ?? [];
-  const done = meds.filter((m) => takenIds.includes(m.id)).length;
+  const takenKeys = taken[today()] ?? [];
+  const { done, total } = dosesToday(meds, taken);
   const [adding, setAdding] = useState(false);
-  const [name, setName] = useState('');
-  const [dose, setDose] = useState('');
-  const [time, setTime] = useState('');
-
-  const save = () => {
-    const t = time.match(/^(\d{1,2}):?(\d{2})?$/);
-    if (!name.trim() || !t || Number(t[1]) > 23) {
-      notify('Escribe el nombre y la hora en formato 24h, por ejemplo 08:00 o 21:30.');
-      return;
-    }
-    addMed({ name: name.trim(), dose: dose.trim() || '1 dosis', hour: Number(t[1]), minute: Number(t[2] ?? 0) });
-    setName('');
-    setDose('');
-    setTime('');
-    setAdding(false);
-  };
 
   const reminders = async () => {
     const ok = await enableMedReminders();
-    notify(ok ? 'Te aviso todos los días a la hora de cada pastilla.' : 'Activa las notificaciones de DESJ en Ajustes del iPhone. En la versión web los avisos diarios no están disponibles.');
+    notify(
+      ok
+        ? 'Te aviso todos los días a la hora de cada dosis. Las dosis sin hora no tienen aviso.'
+        : 'Activa las notificaciones de DESJ en Ajustes del iPhone. En la versión web los avisos diarios no están disponibles.',
+    );
   };
 
   const remove = async (id: string, med: string) => {
@@ -186,54 +174,122 @@ function Pills() {
       <Row>
         <View style={{ gap: 2, flex: 1 }}>
           <Label>Tu plan de hoy</Label>
-          <Text style={styles.big}>{`${done} de ${meds.length} tomadas`}</Text>
+          <Text style={styles.big}>{`${done} de ${total} ${total === 1 ? 'dosis tomada' : 'dosis tomadas'}`}</Text>
         </View>
-        <HudRing size={110} big={`${meds.length ? Math.round((done / meds.length) * 100) : 0}%`} small="" progress={meds.length ? done / meds.length : 0} />
+        <HudRing size={110} big={`${total ? Math.round((done / total) * 100) : 0}%`} small="" progress={total ? done / total : 0} />
       </Row>
 
-      {meds.map((m) => {
-        const t = takenIds.includes(m.id);
-        return (
-          <Pressable key={m.id} onLongPress={() => remove(m.id, m.name)}>
-            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}>
-              <Mono style={{ width: 52, fontSize: 15, fontWeight: '600', color: C.accentSoft }}>{hhmm(m.hour, m.minute)}</Mono>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.name}>{m.name}</Text>
-                <Text style={styles.caption}>{m.dose}</Text>
-              </View>
-              <Pressable
-                onPress={() => {
-                  void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  toggleTaken(m.id);
-                }}
-                style={[styles.btn, t ? styles.btnDone : styles.btnTodo]}
-                accessibilityRole="button">
-                {t ? <IconCheck color={C.ok} size={15} /> : null}
-                <Text style={[styles.btnText, { color: t ? C.ok : C.onAccent }]}>{t ? 'Tomada' : 'Marcar'}</Text>
-              </Pressable>
-            </Card>
-          </Pressable>
-        );
-      })}
+      {meds.map((m) => (
+        <Card key={m.id}>
+          <Row style={{ alignItems: 'flex-start' }}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={styles.name}>{m.name}</Text>
+              <Text style={styles.caption}>{[m.dose, m.perDay > 1 ? `${m.perDay} veces al día` : ''].filter(Boolean).join(' · ')}</Text>
+            </View>
+            <Pressable onPress={() => remove(m.id, m.name)} hitSlop={8} style={styles.remove} accessibilityRole="button" accessibilityLabel={`Quitar ${m.name}`}>
+              <Text style={styles.removeText}>Quitar</Text>
+            </Pressable>
+          </Row>
+          <View style={styles.doses}>
+            {Array.from({ length: m.perDay }, (_, i) => {
+              const n = i + 1;
+              const t = takenKeys.includes(doseKey(m.id, n));
+              return (
+                <Pressable
+                  key={n}
+                  onPress={() => {
+                    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    toggleTaken(m.id, n);
+                  }}
+                  style={[styles.btn, t ? styles.btnDone : styles.btnTodo]}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: t }}
+                  accessibilityLabel={`${m.name}, ${doseLabel(m, n)}`}>
+                  {t ? <IconCheck color={C.ok} size={15} /> : null}
+                  <Text style={[styles.btnText, { color: t ? C.ok : C.onAccent }]}>{m.times[i] ?? (m.perDay > 1 ? `Dosis ${n}` : t ? 'Tomada' : 'Marcar')}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Card>
+      ))}
 
       {adding ? (
-        <Card glow>
-          <Label style={{ color: C.accentSoft }}>Nuevo medicamento</Label>
-          <Field label="Nombre" placeholder="Ej. Losartán" value={name} onChangeText={setName} />
-          <Field label="Dosis" placeholder="Ej. 50 mg con desayuno" value={dose} onChangeText={setDose} />
-          <Field label="Hora (24h)" placeholder="Ej. 08:00" value={time} onChangeText={setTime} keyboardType="numbers-and-punctuation" />
-          <Row>
-            <Btn label="Cancelar" kind="ghost" onPress={() => setAdding(false)} />
-            <Btn label="Guardar" onPress={save} />
-          </Row>
-        </Card>
+        <MedForm
+          onCancel={() => setAdding(false)}
+          onSave={async (m) => {
+            if (await addMed(m)) setAdding(false);
+            else notify('No pude guardar el medicamento. Revisa tu conexión e intenta de nuevo.');
+          }}
+        />
       ) : (
         <Btn label="Agregar medicamento" kind="outline" icon={<IconPlus color={C.chipText} />} onPress={() => setAdding(true)} />
       )}
 
-      {meds.length ? <Btn label="Activar recordatorios diarios" onPress={reminders} /> : null}
-      {meds.length ? <Text style={[styles.caption, { textAlign: 'center' }]}>Mantén presionado un medicamento para quitarlo.</Text> : null}
+      {meds.some((m) => m.times.length) ? <Btn label="Activar recordatorios diarios" onPress={reminders} /> : null}
     </>
+  );
+}
+
+/** Nuevo medicamento: cuántas veces al día y, si quieres, la hora de cada dosis. */
+function MedForm({ onSave, onCancel }: { onSave: (m: MedInput) => Promise<void>; onCancel: () => void }) {
+  const [name, setName] = useState('');
+  const [dose, setDose] = useState('');
+  const [perDay, setPerDay] = useState(1);
+  const [times, setTimes] = useState<string[]>(['']);
+
+  const setCount = (n: number) => {
+    const next = Math.min(MAX_DOSES, Math.max(1, n));
+    setPerDay(next);
+    setTimes((list) => Array.from({ length: next }, (_, i) => list[i] ?? ''));
+  };
+
+  const save = () => {
+    if (!name.trim()) return notify('Escribe el nombre del medicamento, por ejemplo Losartán.');
+    const parsed = times.map((t) => t.trim()).filter(Boolean).map(parseTime);
+    if (parsed.some((t) => !t)) return notify('Escribe las horas en formato 24h, por ejemplo 08:00 o 21:30, o déjalas vacías.');
+    void onSave({ name, dose: dose.trim() || (perDay > 1 ? `${perDay} dosis al día` : '1 dosis'), perDay, times: parsed as string[] });
+  };
+
+  return (
+    <Card glow>
+      <Label style={{ color: C.accentSoft }}>Nuevo medicamento</Label>
+      <Field label="Nombre" placeholder="Ej. Losartán" value={name} onChangeText={setName} />
+      <Field label="Dosis" placeholder="Ej. 50 mg con comida" value={dose} onChangeText={setDose} />
+      <View style={{ gap: 6 }}>
+        <Label>Veces al día</Label>
+        <View style={styles.stepper}>
+          <Pressable onPress={() => setCount(perDay - 1)} disabled={perDay <= 1} style={styles.step} accessibilityRole="button" accessibilityLabel="Menos veces al día">
+            <Text style={[styles.stepText, perDay <= 1 && { color: C.textFaint }]}>−</Text>
+          </Pressable>
+          <Mono style={styles.count}>{String(perDay)}</Mono>
+          <Pressable onPress={() => setCount(perDay + 1)} disabled={perDay >= MAX_DOSES} style={styles.step} accessibilityRole="button" accessibilityLabel="Más veces al día">
+            <Text style={[styles.stepText, perDay >= MAX_DOSES && { color: C.textFaint }]}>+</Text>
+          </Pressable>
+        </View>
+      </View>
+      <View style={{ gap: 6 }}>
+        <View style={styles.times}>
+          {times.map((t, i) => (
+            <View key={i} style={styles.time}>
+              <Field
+                label={perDay > 1 ? `Hora dosis ${i + 1}` : 'Hora'}
+                placeholder="Opcional · 08:00"
+                value={t}
+                onChangeText={(v) => setTimes((list) => list.map((x, j) => (j === i ? v : x)))}
+                keyboardType="numbers-and-punctuation"
+                maxLength={5}
+              />
+            </View>
+          ))}
+        </View>
+        <Text style={styles.caption}>La hora es opcional: déjala vacía si lo tomas cuando te acuerdes o sin horario fijo. Solo las dosis con hora tienen aviso.</Text>
+      </View>
+      <Row>
+        <Btn label="Cancelar" kind="ghost" onPress={onCancel} />
+        <Btn label="Guardar" onPress={save} />
+      </Row>
+    </Card>
   );
 }
 
@@ -245,4 +301,13 @@ const styles = StyleSheet.create({
   btnTodo: { backgroundColor: C.accent },
   btnDone: { borderWidth: 1, borderColor: C.cardBorder },
   btnText: { fontSize: 14, fontWeight: '700' },
+  doses: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  remove: { minHeight: 44, minWidth: 44, alignItems: 'flex-end' },
+  removeText: { color: C.bad, fontSize: 13, fontWeight: '600' },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  step: { width: 44, height: 44, borderRadius: R.pill, borderWidth: 1, borderColor: C.border, backgroundColor: C.surfaceInput, alignItems: 'center', justifyContent: 'center' },
+  stepText: { color: C.chipText, fontSize: 22, fontWeight: '600' },
+  count: { fontSize: 22, fontWeight: '600', minWidth: 28, textAlign: 'center' },
+  times: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  time: { flexBasis: '45%', flexGrow: 1 },
 });

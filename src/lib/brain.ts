@@ -9,7 +9,7 @@ import type { Uploaded } from '@/lib/attachments';
 import { createCalendarEvent, getTodayAgenda } from '@/lib/calendar';
 import { askPermission } from '@/lib/notifications';
 import { addReminder } from '@/lib/reminders';
-import { hhmm, Med } from '@/lib/store';
+import { doseKey, hhmm, Med } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 
 type Actions = {
@@ -142,7 +142,7 @@ async function runActions(reply: string, actions: Actions | null) {
   };
 }
 
-type Ctx = { meds: Med[]; takenIds: string[] };
+type Ctx = { meds: Med[]; takenKeys: string[] };
 
 function parseTime(text: string): Date | null {
   const m = text.match(/(?:a las|a la)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm|de la tarde|de la noche|de la mañana)?/i);
@@ -172,9 +172,13 @@ export async function think(text: string, ctx: Ctx): Promise<string> {
   }
 
   if (/(pastilla|medicamento|medicina|tomar)/.test(t)) {
-    const pending = ctx.meds.filter((m) => !ctx.takenIds.includes(m.id));
+    const pending = ctx.meds.flatMap((m) =>
+      Array.from({ length: m.perDay }, (_, i) => i + 1)
+        .filter((n) => !ctx.takenKeys.includes(doseKey(m.id, n)))
+        .map((n) => (m.times[n - 1] ? `${m.name} a las ${m.times[n - 1]}` : m.perDay > 1 ? `${m.name} (dosis ${n})` : m.name)),
+    );
     if (pending.length === 0) return 'Hoy ya te tomaste todo. Bien ahí.';
-    return `Te faltan ${pending.length}: ${pending.map((m) => `${m.name} a las ${hhmm(m.hour, m.minute)}`).join(', ')}.`;
+    return `Te faltan ${pending.length}: ${pending.join(', ')}.`;
   }
 
   if (/(hola|buenas|buenos)/.test(t)) return 'Hola. ¿Qué necesitas?';

@@ -130,28 +130,30 @@ export const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'registrar_toma',
-    description: 'Marca como tomado hoy un medicamento de la lista. Usa el id que aparece en <medicamentos>.',
+    description:
+      'Marca como tomada hoy una dosis de un medicamento de <medicamentos> (usa su id). dosis es el número de la dosis (1, 2, 3…); usa 0 para la siguiente que siga pendiente.',
     strict: true,
     input_schema: {
       type: 'object',
-      properties: { med_id: { type: 'string' } },
-      required: ['med_id'],
+      properties: { med_id: { type: 'string' }, dosis: { type: 'integer', description: '1…N, o 0 = la siguiente pendiente' } },
+      required: ['med_id', 'dosis'],
       additionalProperties: false,
     },
   },
   {
     name: 'agregar_medicamento',
-    description: 'Agrega un medicamento al plan diario de la persona. Solo si la persona lo pide explícitamente; nunca sugieras dosis.',
+    description:
+      'Agrega un medicamento al plan diario de la persona. Solo si la persona lo pide explícitamente; nunca sugieras dosis ni horarios. horas es opcional: lista vacía si no tiene horario fijo, o una hora "HH:MM" (24 h) por dosis que la persona haya dicho.',
     strict: true,
     input_schema: {
       type: 'object',
       properties: {
         name: { type: 'string' },
         dose: { type: 'string', description: 'Tal como la dijo la persona, ej. "50 mg con desayuno".' },
-        hour: { type: 'integer', description: 'Hora 0-23' },
-        minute: { type: 'integer', description: 'Minuto 0-59' },
+        veces_al_dia: { type: 'integer', description: '1 a 12' },
+        horas: { type: 'array', items: { type: 'string' }, description: 'Horas "HH:MM", a lo más una por dosis; vacía si no tiene horario.' },
       },
-      required: ['name', 'dose', 'hour', 'minute'],
+      required: ['name', 'dose', 'veces_al_dia', 'horas'],
       additionalProperties: false,
     },
   },
@@ -316,20 +318,32 @@ export async function runTool(
       return count ? 'Pendiente marcado como hecho.' : 'No encontré ese pendiente.';
     }
     case 'registrar_toma': {
+      const { data: med } = await db.from('meds').select('id, name, doses_per_day').eq('id', str(input.med_id)).eq('user_id', ctx.userId).maybeSingle();
+      if (!med) return 'No encontré ese medicamento.';
+      let dose = Number(input.dosis);
+      if (!dose) {
+        const { data: taken } = await db.from('med_intakes').select('dose').eq('med_id', med.id).eq('day', ctx.today);
+        const done = new Set((taken ?? []).map((t) => t.dose));
+        dose = Array.from({ length: med.doses_per_day }, (_, i) => i + 1).find((n) => !done.has(n)) ?? 0;
+        if (!dose) return `Hoy ya están todas las dosis de ${med.name}.`;
+      }
+      if (!Number.isInteger(dose) || dose < 1 || dose > med.doses_per_day) throw new Error(`dosis debe ser de 1 a ${med.doses_per_day}`);
       const { error } = await db
         .from('med_intakes')
-        .upsert({ user_id: ctx.userId, med_id: str(input.med_id), day: ctx.today }, { onConflict: 'med_id,day', ignoreDuplicates: true });
+        .upsert({ user_id: ctx.userId, med_id: med.id, day: ctx.today, dose }, { onConflict: 'med_id,day,dose', ignoreDuplicates: true });
       if (error) throw error;
       ctx.actions.intakesChanged = true;
-      return 'Toma registrada para hoy.';
+      return `Dosis ${dose} de ${med.doses_per_day} de ${med.name} registrada para hoy.`;
     }
     case 'agregar_medicamento': {
-      const hour = Number(input.hour);
-      const minute = Number(input.minute);
-      if (!Number.isInteger(hour) || hour < 0 || hour > 23 || !Number.isInteger(minute) || minute < 0 || minute > 59) {
-        throw new Error('hora inválida');
-      }
-      const { error } = await db.from('meds').insert({ user_id: ctx.userId, name: str(input.name), dose: str(input.dose), hour, minute });
+      const perDay = Number(input.veces_al_dia);
+      if (!Number.isInteger(perDay) || perDay < 1 || perDay > 12) throw new Error('veces_al_dia debe ser de 1 a 12');
+      const times = (Array.isArray(input.horas) ? input.horas : []).map((t) => str(t)).filter(Boolean);
+      if (times.length > perDay) throw new Error('hay más horas que dosis');
+      if (times.some((t) => !/^([01]\d|2[0-3]):[0-5]\d$/.test(t))) throw new Error('las horas van como HH:MM en 24 h');
+      const { error } = await db
+        .from('meds')
+        .insert({ user_id: ctx.userId, name: str(input.name), dose: str(input.dose), doses_per_day: perDay, times: [...times].sort() });
       if (error) throw error;
       ctx.actions.medsChanged = true;
       return 'Medicamento agregado.';

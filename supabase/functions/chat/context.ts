@@ -18,7 +18,7 @@ export async function loadContext(db: SupabaseClient, userId: string, agenda: un
     db.from('profiles').select('display_name, about, timezone').eq('id', userId).single(),
     db.from('knowledge').select('slug, content, updated_at').eq('user_id', userId),
     db.from('memories').select('id, category, content, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(150),
-    db.from('meds').select('id, name, dose, hour, minute').eq('user_id', userId).eq('active', true).order('hour').order('minute'),
+    db.from('meds').select('id, name, dose, doses_per_day, times').eq('user_id', userId).eq('active', true).order('created_at'),
     db
       .from('reminders')
       .select('title, due_at, repeat')
@@ -56,9 +56,7 @@ export async function loadContext(db: SupabaseClient, userId: string, agenda: un
     .formatToParts(now)
     .find((p) => p.type === 'timeZoneName')?.value.replace('GMT', '') || '+00:00';
 
-  const { data: intakes } = await db.from('med_intakes').select('med_id').eq('user_id', userId).eq('day', today);
-  const takenIds = new Set((intakes ?? []).map((i) => i.med_id));
-  const pad = (n: number) => String(n).padStart(2, '0');
+  const { data: intakes } = await db.from('med_intakes').select('med_id, dose').eq('user_id', userId).eq('day', today);
 
   const lines = [
     '<contexto_usuario>',
@@ -80,9 +78,7 @@ ${doc?.content.trim() || '[vacío: todavía no hay datos]'}
     '</memorias>',
     '',
     '<medicamentos>',
-    ...(meds.data ?? []).map(
-      (m) => `- [${m.id}] ${pad(m.hour)}:${pad(m.minute)} ${m.name} · ${m.dose} · ${takenIds.has(m.id) ? 'tomado hoy' : 'pendiente hoy'}`,
-    ),
+    ...(meds.data ?? []).map((m) => medLine(m, (intakes ?? []).filter((i) => i.med_id === m.id).map((i) => i.dose))),
     '</medicamentos>',
     '',
     '<recordatorios_pendientes>',
@@ -119,6 +115,17 @@ ${doc?.content.trim() || '[vacío: todavía no hay datos]'}
   const historyMsgs: Anthropic.MessageParam[] = rows.map((r) => ({ role: r.role as 'user' | 'assistant', content: r.content }));
 
   return { block: lines.join('\n'), today, history: historyMsgs };
+}
+
+type MedRow = { id: string; name: string; dose: string; doses_per_day: number; times: string[] };
+
+/** "- [id] Losartán · 50 mg · 2 veces al día · dosis 1 08:00 (tomada hoy), dosis 2 sin hora (pendiente hoy)". */
+function medLine(m: MedRow, taken: number[]): string {
+  const doses = Array.from({ length: m.doses_per_day }, (_, i) => {
+    const n = i + 1;
+    return `${m.doses_per_day > 1 ? `dosis ${n} ` : ''}${m.times[i] ?? 'sin hora'} (${taken.includes(n) ? 'tomada hoy' : 'pendiente hoy'})`;
+  });
+  return `- [${m.id}] ${m.name} · ${m.dose}${m.doses_per_day > 1 ? ` · ${m.doses_per_day} veces al día` : ''} · ${doses.join(', ')}`;
 }
 
 type ExamRow = { id: string; title: string; exam_date: string; kind: string; place: string; doctor: string; results: string; notes: string };

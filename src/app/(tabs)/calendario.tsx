@@ -83,7 +83,7 @@ export default function Calendario() {
       if (show) out.push({ key: r.id, time: timeOf(r.at), title: r.repeat === 'daily' ? `${r.title} (diario)` : r.title, kind: 'desj', color: C.warn, reminderId: r.id });
     }
     if (meds.length && dayStart >= today.getTime()) {
-      out.push({ key: 'meds', time: null, title: `Pastillas: ${meds.map((m) => `${hhmm(m.hour, m.minute)} ${m.name}`).join(' · ')}`, kind: 'pastillas', color: C.muted });
+      out.push({ key: 'meds', time: null, title: `Pastillas: ${meds.map((m) => `${m.times.length ? `${m.times.join(', ')} ` : ''}${m.name}${m.perDay > 1 ? ` (${m.perDay}×)` : ''}`).join(' · ')}`, kind: 'pastillas', color: C.muted });
     }
     return out.sort((a, b) => (a.time ?? '').localeCompare(b.time ?? ''));
   };

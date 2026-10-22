@@ -147,7 +147,7 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
 
       const reply = attachment
         ? `Recibí "${attachment.name}". Para leer archivos necesito estar conectado al cerebro (Claude); por ahora queda solo en este chat.`
-        : await think(text, { meds, takenIds: taken[today()] ?? [] });
+        : await think(text, { meds, takenKeys: taken[today()] ?? [] });
       const answer: ChatMsg = { id: `${Date.now()}r`, from: 'desj', text: reply };
       const id = activeId ?? `c${Date.now()}`;
       const current = local.find((c) => c.id === id);
