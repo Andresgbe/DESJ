@@ -8,7 +8,7 @@
     "scheme": "desj",
     "userInterfaceStyle": "dark",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.agsoftware.desj",
       "supportsTablet": false
     },
