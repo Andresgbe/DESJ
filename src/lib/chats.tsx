@@ -5,17 +5,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 
-import { Attachment, uploadAttachment } from '@/lib/attachments';
+import { Attachment, Uploaded, uploadAttachment } from '@/lib/attachments';
 import { useAuth } from '@/lib/auth';
 import { askDesj, think } from '@/lib/brain';
 import { today, useStore } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 
 export type Conversation = { id: string; title: string; updatedAt: string };
-export type ChatMsg = { id: string; from: 'me' | 'desj'; text: string; attachment?: string };
+export type ChatMsg = { id: string; from: 'me' | 'desj'; text: string; attachments?: string[] };
 
-// En la nube el adjunto se guarda como una línea "[Adjunto: nombre]" al final del mensaje.
-const ATTACHMENT_LINE = /\n?\[Adjunto: (.+)\]$/;
+// En la nube cada adjunto se guarda como una línea "[Adjunto: nombre]" al final del mensaje.
+const ATTACHMENT_LINE = /\n?\[Adjunto: (.+)\]$/gm;
 type LocalConversation = Conversation & { messages: ChatMsg[] };
 
 const LOCAL_KEY = 'desj:chats:v1';
@@ -28,8 +28,8 @@ type Ctx = {
   activeId: string | null;
   messages: ChatMsg[];
   busy: boolean;
-  /** Envía un mensaje (y opcionalmente un adjunto) en la conversación activa o en una nueva. Devuelve la respuesta de DESJ. */
-  send: (text: string, attachment?: Attachment | null) => Promise<string | null>;
+  /** Envía un mensaje (y opcionalmente archivos) en la conversación activa o en una nueva. Devuelve la respuesta de DESJ. */
+  send: (text: string, files?: Attachment[]) => Promise<string | null>;
   newChat: () => void;
   open: (id: string) => Promise<void>;
   remove: (id: string) => Promise<void>;
@@ -64,8 +64,8 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
       .order('created_at', { ascending: true })
       .limit(200);
     return (data ?? []).map((r): ChatMsg => {
-      const m = r.content.match(ATTACHMENT_LINE);
-      return { id: r.id, from: r.role === 'user' ? 'me' : 'desj', text: m ? r.content.replace(ATTACHMENT_LINE, '') : r.content, attachment: m?.[1] };
+      const names = [...r.content.matchAll(ATTACHMENT_LINE)].map((m) => m[1]);
+      return { id: r.id, from: r.role === 'user' ? 'me' : 'desj', text: names.length ? r.content.replace(ATTACHMENT_LINE, '').trim() : r.content, attachments: names.length ? names : undefined };
     });
   }, []);
 
@@ -109,22 +109,22 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     AsyncStorage.setItem(LOCAL_KEY, JSON.stringify(trimmed));
   };
 
-  const send = async (text: string, attachment?: Attachment | null) => {
+  const send = async (text: string, files: Attachment[] = []) => {
     if (busy) return null;
-    const title = makeTitle(text || attachment?.name || 'Archivo');
-    const mine: ChatMsg = { id: `${Date.now()}`, from: 'me', text, attachment: attachment?.name };
+    const title = makeTitle(text || files[0]?.name || 'Archivo');
+    const mine: ChatMsg = { id: `${Date.now()}`, from: 'me', text, attachments: files.length ? files.map((f) => f.name) : undefined };
     setMessages((m) => [...m, mine]);
     setBusy(true);
     const now = new Date().toISOString();
 
     try {
       if (cloud) {
-        let uploaded;
-        if (attachment && session) {
+        const uploaded: Uploaded[] = [];
+        if (files.length && session) {
           try {
-            uploaded = await uploadAttachment(attachment, session.user.id);
+            for (const f of files) uploaded.push(await uploadAttachment(f, session.user.id));
           } catch (e) {
-            const msg = e instanceof Error ? e.message : 'No pude subir el archivo.';
+            const msg = e instanceof Error ? e.message : 'No pude subir los archivos.';
             setMessages((m) => [...m, { id: `${Date.now()}r`, from: 'desj', text: msg }]);
             return msg;
           }
@@ -145,8 +145,8 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
         return res.reply;
       }
 
-      const reply = attachment
-        ? `Recibí "${attachment.name}". Para leer archivos necesito estar conectado al cerebro (Claude); por ahora queda solo en este chat.`
+      const reply = files.length
+        ? `Recibí ${files.length === 1 ? `"${files[0].name}"` : `${files.length} archivos`}. Para leer archivos necesito estar conectado al cerebro (Claude); por ahora quedan solo en este chat.`
         : await think(text, { meds, takenKeys: taken[today()] ?? [] });
       const answer: ChatMsg = { id: `${Date.now()}r`, from: 'desj', text: reply };
       const id = activeId ?? `c${Date.now()}`;

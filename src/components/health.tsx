@@ -1,40 +1,53 @@
-// Piezas del módulo YO · Salud: formulario de examen, formulario y tarjeta de contacto, fila de examen
-// en la línea de tiempo y el selector para adjuntar archivos.
-import { useState } from 'react';
+// Piezas del módulo YO · Salud: formulario de registro del historial (consulta, laboratorio…), selector de
+// archivos con su tipo (informe, orden…), archivo con vista previa y descarga, fila del historial y contactos.
+import { Image } from 'expo-image';
+import * as WebBrowser from 'expo-web-browser';
+import { useEffect, useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Btn, Choice, Field } from '@/components/form';
 import { IconChevron, IconClip, IconFile } from '@/components/icons';
 import { Card, Label, Mono, Row } from '@/components/ui';
-import { Attachment, pickAttachment } from '@/lib/attachments';
+import { Attachment, pickAttachments } from '@/lib/attachments';
 import { notify } from '@/lib/confirm';
-import { CONTACT_KINDS, Contact, ContactInput, EXAM_KINDS, Exam, ExamInput, ExamKind, formatDate, parseDate, toDmy } from '@/lib/health';
+import { CONTACT_KINDS, Contact, ContactInput, DOC_TYPES, DocType, EXAM_KINDS, Exam, ExamFile, ExamInput, ExamKind, parseDate, toDmy } from '@/lib/health';
 import { C, mono, R } from '@/theme';
 
-const EMPTY_EXAM: ExamInput = { title: '', date: '', kind: 'laboratorio', place: '', doctor: '', results: '', notes: '' };
+export type PendingFile = { file: Attachment; docType: DocType };
 
-/** Nuevo examen o edición. `withFiles`: deja elegir archivos que se suben al guardar (solo exámenes nuevos). */
+const EMPTY_EXAM: ExamInput = { title: '', date: '', kind: 'consulta', place: '', doctor: '', results: '', notes: '' };
+const docLabel = (t: DocType) => DOC_TYPES.find((d) => d.id === t)!.label;
+
+/** "22/10/2026" de hoy, para que una consulta de hoy no haya que escribirla. */
+function todayDmy() {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+}
+
+/** Nuevo registro del historial o edición. `withFiles`: deja elegir archivos que se suben al guardar. */
 export function ExamForm({
   initial,
   withFiles,
+  defaultKind = 'consulta',
   onSave,
   onCancel,
 }: {
   initial?: Exam;
   withFiles?: boolean;
-  onSave: (input: ExamInput, files: Attachment[]) => Promise<void>;
+  defaultKind?: ExamKind;
+  onSave: (input: ExamInput, files: PendingFile[]) => Promise<void>;
   onCancel: () => void;
 }) {
-  const [form, setForm] = useState<ExamInput>(initial ? { ...initial } : EMPTY_EXAM);
-  const [dateText, setDateText] = useState(initial ? toDmy(initial.date) : '');
-  const [files, setFiles] = useState<Attachment[]>([]);
+  const [form, setForm] = useState<ExamInput>(initial ? { ...initial } : { ...EMPTY_EXAM, kind: defaultKind });
+  const [dateText, setDateText] = useState(initial ? toDmy(initial.date) : todayDmy());
+  const [files, setFiles] = useState<PendingFile[]>([]);
   const [saving, setSaving] = useState(false);
   const set = (patch: Partial<ExamInput>) => setForm((f) => ({ ...f, ...patch }));
+  const kind = EXAM_KINDS.find((k) => k.id === form.kind)!;
 
   const save = async () => {
     const date = parseDate(dateText);
-    if (!form.title.trim()) return notify('Escribe qué examen es, por ejemplo "Hematología completa".');
-    if (!date) return notify('Escribe la fecha en que te hiciste el examen como DD/MM/AAAA, por ejemplo 14/03/2023. No puede ser una fecha futura.');
+    if (!date) return notify('Escribe la fecha como DD/MM/AAAA, por ejemplo 22/10/2026. No puede ser una fecha futura.');
     setSaving(true);
     try {
       await onSave({ ...form, date }, files);
@@ -45,24 +58,24 @@ export function ExamForm({
 
   return (
     <Card glow>
-      <Label style={{ color: C.accentSoft }}>{initial ? 'Editar examen' : 'Nuevo examen'}</Label>
-      <Field label="Examen" placeholder="Ej. Hematología completa" value={form.title} onChangeText={(title) => set({ title })} />
+      <Label style={{ color: C.accentSoft }}>{initial ? 'Editar registro' : 'Nuevo registro'}</Label>
+      <Choice<ExamKind> label="Qué fue" options={EXAM_KINDS} value={form.kind} onChange={(k) => set({ kind: k })} />
       <Field
-        label="Fecha del examen"
+        label="Fecha"
         placeholder="DD/MM/AAAA"
-        hint="Cuándo te lo hiciste, aunque lo cargues hoy. Así queda en su lugar en la línea de tiempo."
+        hint="Cuándo pasó, aunque lo cargues después. Así queda en su lugar en el historial."
         value={dateText}
         onChangeText={setDateText}
         keyboardType="numbers-and-punctuation"
         maxLength={10}
       />
-      <Choice<ExamKind> label="Tipo" options={EXAM_KINDS} value={form.kind} onChange={(kind) => set({ kind })} />
+      <Field label="Nombre" placeholder={`Opcional. Si lo dejas vacío: "${kind.title}"`} value={form.title} onChangeText={(title) => set({ title })} />
       <Field label="Clínica o laboratorio" placeholder="Opcional" value={form.place} onChangeText={(place) => set({ place })} />
-      <Field label="Doctor" placeholder="Opcional" value={form.doctor} onChangeText={(doctor) => set({ doctor })} />
+      <Field label="Doctor" placeholder="Opcional. Ej. Dra. Pérez, cardiología" value={form.doctor} onChangeText={(doctor) => set({ doctor })} />
       <Field
-        label="Resultados principales"
-        placeholder="Opcional. Ej. Glucosa 98 mg/dL, colesterol 210 mg/dL"
-        hint="DESJ también puede leer el archivo y anotarlos por ti."
+        label="Resultados o indicaciones"
+        placeholder="Opcional. Ej. Glucosa 98 mg/dL; control en 3 meses"
+        hint="DESJ también puede leer los archivos y anotarlos por ti."
         value={form.results}
         onChangeText={(results) => set({ results })}
         multiline
@@ -72,9 +85,9 @@ export function ExamForm({
         <View style={{ gap: 8 }}>
           <Label>Archivos</Label>
           {files.map((f, i) => (
-            <FileLine key={`${f.name}${i}`} name={f.name} onRemove={() => setFiles((list) => list.filter((_, j) => j !== i))} />
+            <FileLine key={`${f.file.name}${i}`} name={f.file.name} tag={docLabel(f.docType)} onRemove={() => setFiles((list) => list.filter((_, j) => j !== i))} />
           ))}
-          <FilePicker onPick={(a) => setFiles((list) => [...list, a])} />
+          <FilePicker onPick={(file, docType) => setFiles((list) => [...list, { file, docType }])} />
         </View>
       ) : null}
       <Row>
@@ -85,34 +98,39 @@ export function ExamForm({
   );
 }
 
-/** Botones para adjuntar: galería, cámara (solo teléfono) y archivo (PDF, imagen). */
-export function FilePicker({ onPick, disabled }: { onPick: (a: Attachment) => void | Promise<void>; disabled?: boolean }) {
+/** Primero qué es el documento (informe, orden…), después de dónde sale: galería, cámara (teléfono) o archivo. Varios a la vez. */
+export function FilePicker({ onPick, disabled }: { onPick: (a: Attachment, docType: DocType) => void | Promise<void>; disabled?: boolean }) {
+  const [docType, setDocType] = useState<DocType>('informe');
   const pick = async (source: 'galeria' | 'camara' | 'archivo') => {
     try {
-      const a = await pickAttachment(source);
-      if (a) await onPick(a);
+      for (const a of await pickAttachments(source)) await onPick(a, docType);
     } catch (e) {
       notify(e instanceof Error ? e.message : 'No pude abrir ese archivo.');
     }
   };
   return (
-    <View style={styles.picker}>
-      <Btn label="Foto" kind="outline" icon={<IconClip color={C.chipText} size={16} />} onPress={() => pick('galeria')} disabled={disabled} />
-      {Platform.OS !== 'web' ? <Btn label="Cámara" kind="outline" onPress={() => pick('camara')} disabled={disabled} /> : null}
-      <Btn label="PDF o archivo" kind="outline" icon={<IconFile color={C.chipText} />} onPress={() => pick('archivo')} disabled={disabled} />
+    <View style={{ gap: 8 }}>
+      <Choice<DocType> label="Tipo de documento" options={DOC_TYPES} value={docType} onChange={setDocType} />
+      <View style={styles.picker}>
+        <Btn label="Foto" kind="outline" icon={<IconClip color={C.chipText} size={16} />} onPress={() => pick('galeria')} disabled={disabled} />
+        {Platform.OS !== 'web' ? <Btn label="Cámara" kind="outline" onPress={() => pick('camara')} disabled={disabled} /> : null}
+        <Btn label="PDF o archivo" kind="outline" icon={<IconFile color={C.chipText} />} onPress={() => pick('archivo')} disabled={disabled} />
+      </View>
     </View>
   );
 }
 
-export function FileLine({ name, onPress, onRemove }: { name: string; onPress?: () => void; onRemove?: () => void }) {
+/** Archivo elegido que todavía no se sube (en el formulario). */
+export function FileLine({ name, tag, onRemove }: { name: string; tag?: string; onRemove?: () => void }) {
   return (
     <View style={styles.file}>
-      <Pressable onPress={onPress} disabled={!onPress} style={styles.fileName} accessibilityRole={onPress ? 'link' : undefined}>
+      <View style={styles.fileName}>
         <IconFile color={C.accentSoft} />
-        <Text style={[styles.body, onPress && { color: C.accentSoft }]} numberOfLines={1}>
+        {tag ? <Text style={styles.tag}>{tag}</Text> : null}
+        <Text style={styles.body} numberOfLines={1}>
           {name}
         </Text>
-      </Pressable>
+      </View>
       {onRemove ? (
         <Pressable onPress={onRemove} hitSlop={8} style={styles.fileRemove} accessibilityRole="button" accessibilityLabel={`Quitar ${name}`}>
           <Text style={styles.removeText}>Quitar</Text>
@@ -122,25 +140,77 @@ export function FileLine({ name, onPress, onRemove }: { name: string; onPress?: 
   );
 }
 
-/** Fila de la línea de tiempo: fecha a la izquierda, examen y detalle a la derecha. */
+/**
+ * Archivo guardado: tipo, nombre, miniatura si es foto, y Ver / Descargar / Quitar.
+ * Ver abre la vista previa (el visor del teléfono o una pestaña del navegador para PDF); Descargar lo baja con su nombre.
+ */
+export function FileCard({ file, getUrl, onRemove }: { file: ExamFile; getUrl: (f: ExamFile, download?: boolean) => Promise<string | null>; onRemove: () => void }) {
+  const isImage = file.mime.startsWith('image/');
+  const [thumb, setThumb] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    if (isImage) void getUrl(file).then((u) => alive && setThumb(u));
+    return () => {
+      alive = false;
+    };
+  }, [file, getUrl, isImage]);
+
+  const open = async (download: boolean) => {
+    const url = await getUrl(file, download);
+    if (!url) return notify('No pude abrir el archivo. Revisa tu conexión.');
+    if (Platform.OS === 'web') window.open(url, '_blank', 'noopener');
+    else await WebBrowser.openBrowserAsync(url);
+  };
+
+  return (
+    <View style={styles.fileCard}>
+      {isImage && thumb ? (
+        <Pressable onPress={() => open(false)} accessibilityRole="imagebutton" accessibilityLabel={`Ver ${file.name}`}>
+          <Image source={{ uri: thumb }} style={styles.thumb} contentFit="cover" />
+        </Pressable>
+      ) : null}
+      <View style={styles.fileName}>
+        <IconFile color={C.accentSoft} />
+        <Text style={styles.tag}>{docLabel(file.docType)}</Text>
+        <Text style={styles.body} numberOfLines={1}>
+          {file.name}
+        </Text>
+      </View>
+      <Row style={{ justifyContent: 'flex-start', gap: 8 }}>
+        <Btn label="Ver" kind="outline" onPress={() => open(false)} style={styles.small} />
+        <Btn label="Descargar" kind="ghost" onPress={() => open(true)} style={styles.small} />
+        <View style={{ flex: 1 }} />
+        <Pressable onPress={onRemove} hitSlop={8} style={styles.fileRemove} accessibilityRole="button" accessibilityLabel={`Quitar ${file.name}`}>
+          <Text style={styles.removeText}>Quitar</Text>
+        </Pressable>
+      </Row>
+    </View>
+  );
+}
+
+/** Fila del historial: día a la izquierda, qué fue y su detalle a la derecha. */
 export function ExamRow({ exam, onPress }: { exam: Exam; onPress: () => void }) {
-  const [day, month] = formatDate(exam.date).split(' ');
+  const day = Number(exam.date.slice(8, 10));
   const kind = EXAM_KINDS.find((k) => k.id === exam.kind)?.label ?? '';
-  const detail = [kind, exam.place, exam.files.length ? `${exam.files.length} ${exam.files.length === 1 ? 'archivo' : 'archivos'}` : ''].filter(Boolean).join(' · ');
+  const types = [...new Set(exam.files.map((f) => docLabel(f.docType).toLowerCase()))];
+  const detail = [exam.doctor || exam.place, types.length ? `${exam.files.length} ${exam.files.length === 1 ? 'archivo' : 'archivos'} (${types.join(', ')})` : ''].filter(Boolean).join(' · ');
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.exam, pressed && { backgroundColor: C.surfaceSelected }]} accessibilityRole="button">
       <View style={styles.date}>
-        <Mono style={styles.day}>{day}</Mono>
-        <Text style={styles.month}>{month}</Text>
+        <Mono style={styles.day}>{String(day)}</Mono>
+        <Text style={styles.month}>{kind}</Text>
       </View>
       <View style={styles.rail} />
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={styles.name} numberOfLines={2}>
           {exam.title}
         </Text>
-        <Text style={styles.caption} numberOfLines={1}>
-          {detail}
-        </Text>
+        {detail ? (
+          <Text style={styles.caption} numberOfLines={2}>
+            {detail}
+          </Text>
+        ) : null}
       </View>
       <IconChevron color={C.muted} />
     </Pressable>
@@ -211,15 +281,18 @@ const styles = StyleSheet.create({
   name: { color: C.text, fontSize: 15, fontWeight: '600' },
   caption: { color: C.muted, fontSize: 12.5 },
   picker: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tag: { fontFamily: mono, fontSize: 10, letterSpacing: 1.2, color: C.accentSoft, textTransform: 'uppercase' },
+  fileCard: { gap: 8, padding: 12, borderRadius: R.field, borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.surfaceSunken },
+  thumb: { width: '100%', height: 180, borderRadius: R.field, backgroundColor: C.surfaceInput },
   small: { flexGrow: 0, minHeight: 44, paddingHorizontal: 18 },
   file: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingHorizontal: 12, borderRadius: R.field, borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.surfaceSunken },
   fileName: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
   fileRemove: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
   removeText: { color: C.bad, fontSize: 13, fontWeight: '600' },
   exam: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64, paddingVertical: 10, paddingHorizontal: 12, borderRadius: R.card, borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.card },
-  date: { width: 40, alignItems: 'center' },
+  date: { width: 64, alignItems: 'center' },
   day: { fontSize: 18, fontWeight: '600', color: C.text },
-  month: { fontFamily: mono, fontSize: 10, letterSpacing: 1.5, color: C.accentSoft, textTransform: 'uppercase' },
+  month: { fontFamily: mono, fontSize: 8.5, letterSpacing: 0.6, color: C.accentSoft, textTransform: 'uppercase' },
   rail: { width: 1, alignSelf: 'stretch', backgroundColor: C.border },
   link: { flexDirection: 'row', gap: 10, minHeight: 44, alignItems: 'center' },
   linkLabel: { fontFamily: mono, fontSize: 10, letterSpacing: 1.5, color: C.muted, textTransform: 'uppercase', width: 80 },

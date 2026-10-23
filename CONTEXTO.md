@@ -78,9 +78,10 @@ Encuesta: propósito = *ahorrar tiempo en tareas repetitivas*; tipo = *app o pla
 | Pendientes | Lista de tareas por usuario (reemplaza la pestaña Rutinas) | 1 ✅ |
 | Historial de chats | Varias conversaciones por usuario; la memoria es común a todas | 1 ✅ |
 | Salud · medicamentos | Plan diario, marcar tomadas, avisos diarios | 0 ✅ |
-| Salud · exámenes y contactos | YO · Salud: exámenes con fotos/PDF en línea de tiempo por la fecha en que se hicieron; contactos (doctores, clínicas, laboratorios). DESJ los ve, lee los archivos (`leer_examen`), anota resultados y guarda exámenes y contactos desde el chat | 1 ✅ |
+| Salud · historial médico y contactos | YO · Salud: historial de consultas, laboratorios, estudios y procedimientos, agrupado por año y mes (lo más reciente arriba), cada registro con sus archivos tipificados (informe, orden, resultado, receta) que se ven y descargan; contactos (doctores, clínicas, laboratorios). DESJ los ve, lee los archivos (`leer_registro_medico`), anota resultados y guarda registros, archivos (`adjuntar_a_registro_medico`) y contactos desde el chat | 1 ✅ |
+| Salud · pastillas | Varias dosis al día (1–12), cada una con hora opcional; se marca cada dosis; avisos solo para dosis con hora | 1 ✅ |
 | Mis datos | YO · Mis datos: formulario de datos básicos y médicos que escribe en perfil.md y salud.md (se ve en Conocimiento) | 1 ✅ |
-| Finanzas | YO · Finanzas: [pendiente] especificaciones de la vista | 2 |
+| Finanzas | YO · Finanzas: Ingresos y gastos en Bs, dólar BCV, efectivo, USDT y euro llevados a dólar BCV (tasas de DolarAPI), con gráfica diaria, desglose por categoría, tasas y categorías editables; Deudas; Presupuesto mensual (recurrentes + puntuales). DESJ registra movimientos desde el chat (`registrar_movimiento`, `actualizar_tasas`, `fijar_tasa`) | 1 ✅ |
 | Módulos | Pestaña MÓDULOS: la persona agrega, quita y ordena módulos (Negocios, Vehículo, Hogar, Mascotas, Viajes, Documentos, Otro). Negocios abre su vista; los demás son una bitácora de registros (título, fecha, detalle) que DESJ ve y llena con `agregar_registro_modulo` | 1 ✅ |
 | Salud · Garmin | Sueño, FC reposo, pasos, entrenos vía Apple Health | 2 |
 | Ganadería | Rebaño por lotes, pesajes, vacunas, partos, alertas sanitarias | 2 |
@@ -122,10 +123,10 @@ src/
     (tabs)/index.tsx       ← Núcleo: al entrar solo el cerebro grande + botón "Hablar con DESJ"; al tocarlo el cerebro se achica y aparece el chat, estado del día y el chat con DESJ (con historial)
     (tabs)/calendario.tsx  ← mes + día: calendario del teléfono, recordatorios de DESJ y pastillas; agregar
     (tabs)/yo/index.tsx    ← módulo YO: armadura holográfica que gira + altura, peso, IMC, edad, sangre, pastillas; entrada a los módulos personales
-    (tabs)/yo/salud.tsx    ← YO · Salud: pestañas Pastillas (marcar, agregar, quitar, recordatorios), Exámenes (línea de tiempo por año) y Contactos
-    (tabs)/yo/examen/[id].tsx ← detalle de un examen: datos, archivos (ver, agregar, quitar), editar, borrar
+    (tabs)/yo/salud.tsx    ← YO · Salud: pestañas Pastillas (dosis múltiples, horas opcionales, recordatorios), Historial (año → mes → día) y Contactos
+    (tabs)/yo/examen/[id].tsx ← detalle de un registro del historial: datos, archivos por tipo con vista previa y descarga, editar, borrar
     (tabs)/yo/mis-datos.tsx ← YO · Mis datos: formulario que escribe en perfil.md / salud.md
-    (tabs)/yo/finanzas.tsx ← YO · Finanzas: [pendiente] (espera el MD de especificaciones)
+    (tabs)/yo/finanzas.tsx ← YO · Finanzas: pestañas Ingresos y gastos, Deudas, Presupuesto
     (tabs)/modulos/index.tsx ← MÓDULOS: lista de módulos; agregar, editar, quitar y ordenar
     (tabs)/modulos/[id].tsx ← bitácora de un módulo (registros con título, fecha y detalle)
     (tabs)/modulos/negocios.tsx ← ganadería, legal, mercado (datos de EJEMPLO)
@@ -147,6 +148,8 @@ src/
     form.tsx               ← Field, Choice, Btn: controles de formulario de los módulos
     health.tsx             ← piezas de Salud: formulario y fila de examen, contactos, selector de archivos
     modules.tsx            ← ícono por tipo de módulo y formulario de módulo
+    finance.tsx            ← Finanzas: gráfica SVG del mes, tasas, categorías, totales, lista y formulario de movimiento
+    finance-lists.tsx      ← Finanzas: pestañas Deudas y Presupuesto, selector de mes
   lib/
     store.tsx              ← pastillas, tomas y rutinas (local o Supabase)
     chats.tsx              ← historial de conversaciones (local o Supabase)
@@ -154,6 +157,7 @@ src/
     health.ts              ← exámenes, archivos de exámenes y contactos de salud (local o Supabase)
     modules.ts             ← módulos y sus registros (local o Supabase)
     dates.ts               ← fechas DD/MM/AAAA ↔ YYYY-MM-DD, "14 mar 2023", "hace 3 años"
+    finance.ts             ← Finanzas: conversión a dólar BCV, totales, datos (local o Supabase) · dolar-api.ts ← tasas de hoy: Edge Function `tasas` (DolarAPI + USDT de Binance P2P, como cc-sacramento; código en supabase/functions/_shared/dolar.ts) o DolarAPI directo sin sesión
     reminders.ts           ← registro de recordatorios de DESJ (notificaciones locales)
     brain.ts               ← askDesj() (Edge Function) y think() (reglas, modo demo)
     calendar.ts, notifications.ts, supabase.ts, auth.tsx, confirm.ts
@@ -191,6 +195,12 @@ Inspirada en el carrusel de Adrián y en los grafos tipo "Jarvis": fondo casi ne
 **Núcleo (18 oct 2026):** sin saludo ni fecha. Al entrar solo se ve DESJ grande y centrado con el botón **HABLAR CON DESJ**; al tocarlo el cerebro se achica y sube (450 ms) y aparece la conversación. Historial, conversación nueva, voz y "Volver a DESJ" están en el menú hamburguesa del header.
 
 **Módulo YO (18 oct 2026):** la pestaña Salud se reemplazó por **YO**. Muestra una armadura holográfica genérica que gira (inspirada en la referencia; no es el modelo de Iron Man, que es de Marvel) con tus datos a los lados, leídos de perfil.md y salud.md con el formato `- **Campo:** valor` (Talla, Peso, Tipo de sangre, Fecha de nacimiento o Edad). Adentro viven los módulos personales: Salud, Plan físico y Tus datos.
+
+**Finanzas (23 oct 2026):** réplica del módulo Finance de NEXUS adaptada a DESJ (español de "tú", tokens HUD, chips en vez de selects). Regla: `amount_usd = amount / rate_per_usd`, guardado con el movimiento (cambiar una tasa no toca lo registrado); las tasas nacen en null y nunca se inventan. Tablas `finance_categories`, `finance_rates`, `finance_transactions`, `finance_bills`, `finance_monthly_budget`; se siembran al abrir Finanzas si la cuenta no tiene categorías ni tasas. Los colores de categoría son datos de la persona (paleta en `lib/finance.ts`), no tokens de la interfaz.
+
+**Varios archivos por mensaje (22 oct 2026):** el chat acepta hasta 5 archivos (18 MB entre todos). Van en `messages.attachments` (jsonb; el primero también en las columnas viejas) y llegan a Claude numerados (Archivo 1, 2…); `guardar_registro_medico` y `adjuntar_a_registro_medico` reciben `archivos: [{ numero, tipo_documento }]`.
+
+**Historial médico y dosis (22 oct 2026):** la pestaña Exámenes pasó a ser **Historial**: cada consulta, laboratorio, estudio o procedimiento es un registro con fecha (tabla `health_exams`, tipo `consulta` por defecto) y sus archivos llevan `doc_type` (informe, orden, resultado, receta, imagen, otro). Pastillas: `meds.doses_per_day` + `meds.times` (horas opcionales) reemplazan a `hour`/`minute`; `med_intakes.dose` registra cada dosis.
 
 **YO y Módulos (22 oct 2026):** YO tiene tres módulos: **Salud** (pestañas Pastillas, Exámenes y Contactos; los exámenes se ordenan por la fecha en que se hicieron), **Finanzas** ([pendiente] el MD con la vista) y **Mis datos** (formulario que escribe en perfil.md y salud.md sin tocar el resto del archivo; respeta sinónimos como Altura/Talla). Plan físico se quitó. La pestaña Negocios pasó a ser **MÓDULOS**: cada persona arma su lista (tablas `modules` y `module_entries`); Negocios es el primero por defecto. Archivos de exámenes en Storage: `documentos/<usuario>/salud/<examen>/`.
 

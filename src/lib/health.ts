@@ -1,8 +1,10 @@
-// YO · Salud: exámenes médicos (con sus archivos) y contactos de salud (doctores, clínicas, laboratorios).
+// YO · Salud: historial médico (consultas, laboratorios, estudios, con sus archivos: informes, órdenes,
+// resultados, recetas) y contactos de salud (doctores, clínicas, laboratorios).
 // - Con sesión: viven en Supabase (privados por usuario) y los archivos en Storage, en
-//   documentos/<usuario>/salud/<examen>/. DESJ los ve en su contexto y puede leerlos y crearlos.
-// - Sin nube: exámenes y contactos viven en el teléfono, sin archivos.
-// Los exámenes se ordenan por la fecha en que se hicieron, no por cuándo se cargaron.
+//   documentos/<usuario>/salud/<registro>/. DESJ los ve en su contexto y puede leerlos, crearlos y adjuntar.
+// - Sin nube: registros y contactos viven en el teléfono, sin archivos.
+// El historial se ordena por la fecha en que pasó cada cosa, no por cuándo se cargó.
+// (En código y en la base se siguen llamando "exams" / health_exams.)
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useState } from 'react';
 
@@ -12,13 +14,24 @@ import { supabase } from '@/lib/supabase';
 
 export { formatDate, parseDate, since, toDmy } from '@/lib/dates';
 
-export type ExamKind = 'laboratorio' | 'imagen' | 'consulta' | 'otro';
+export type ExamKind = 'consulta' | 'laboratorio' | 'imagen' | 'procedimiento' | 'otro';
+export type DocType = 'informe' | 'orden' | 'resultado' | 'receta' | 'imagen' | 'otro';
 export type ContactKind = 'doctor' | 'clinica' | 'laboratorio' | 'otro';
 
-export const EXAM_KINDS: { id: ExamKind; label: string }[] = [
-  { id: 'laboratorio', label: 'Laboratorio' },
+/** `title`: nombre que toma el registro si no le pones uno ("Consulta médica"). */
+export const EXAM_KINDS: { id: ExamKind; label: string; title: string }[] = [
+  { id: 'consulta', label: 'Consulta', title: 'Consulta médica' },
+  { id: 'laboratorio', label: 'Laboratorio', title: 'Examen de laboratorio' },
+  { id: 'imagen', label: 'Imagen', title: 'Estudio de imagen' },
+  { id: 'procedimiento', label: 'Procedimiento', title: 'Procedimiento' },
+  { id: 'otro', label: 'Otro', title: 'Registro médico' },
+];
+export const DOC_TYPES: { id: DocType; label: string }[] = [
+  { id: 'informe', label: 'Informe' },
+  { id: 'orden', label: 'Orden' },
+  { id: 'resultado', label: 'Resultado' },
+  { id: 'receta', label: 'Receta' },
   { id: 'imagen', label: 'Imagen' },
-  { id: 'consulta', label: 'Consulta' },
   { id: 'otro', label: 'Otro' },
 ];
 export const CONTACT_KINDS: { id: ContactKind; label: string }[] = [
@@ -28,7 +41,7 @@ export const CONTACT_KINDS: { id: ContactKind; label: string }[] = [
   { id: 'otro', label: 'Otro' },
 ];
 
-export type ExamFile = { id: string; examId: string; name: string; mime: string; size: number | null; path: string };
+export type ExamFile = { id: string; examId: string; name: string; mime: string; size: number | null; path: string; docType: DocType };
 export type Exam = {
   id: string;
   title: string;
@@ -59,13 +72,13 @@ const LOCAL_KEY = 'desj:health:v1';
 type LocalState = { exams: Exam[]; contacts: Contact[] };
 
 const EXAM_COLS = 'id, title, exam_date, kind, place, doctor, results, notes, created_at';
-const FILE_COLS = 'id, exam_id, name, mime, size, storage_path';
+const FILE_COLS = 'id, exam_id, name, mime, size, storage_path, doc_type';
 const CONTACT_COLS = 'id, kind, name, specialty, phone, email, address, notes';
 
 type ExamRow = { id: string; title: string; exam_date: string; kind: ExamKind; place: string; doctor: string; results: string; notes: string; created_at: string };
-type FileRow = { id: string; exam_id: string; name: string; mime: string; size: number | null; storage_path: string };
+type FileRow = { id: string; exam_id: string; name: string; mime: string; size: number | null; storage_path: string; doc_type: DocType };
 
-const fileFromRow = (r: FileRow): ExamFile => ({ id: r.id, examId: r.exam_id, name: r.name, mime: r.mime, size: r.size, path: r.storage_path });
+const fileFromRow = (r: FileRow): ExamFile => ({ id: r.id, examId: r.exam_id, name: r.name, mime: r.mime, size: r.size, path: r.storage_path, docType: r.doc_type });
 const examFromRow = (r: ExamRow, files: ExamFile[]): Exam => ({
   id: r.id,
   title: r.title,
@@ -79,7 +92,7 @@ const examFromRow = (r: ExamRow, files: ExamFile[]): Exam => ({
   files: files.filter((f) => f.examId === r.id),
 });
 const examToRow = (e: ExamInput) => ({
-  title: e.title.trim().slice(0, 200),
+  title: (e.title.trim() || EXAM_KINDS.find((k) => k.id === e.kind)!.title).slice(0, 200),
   exam_date: e.date,
   kind: e.kind,
   place: e.place.trim(),
@@ -182,8 +195,8 @@ export function useHealth() {
     }
   };
 
-  /** Sube un archivo al examen. Lanza Error con un mensaje para la persona. */
-  const addFile = async (examId: string, a: Attachment) => {
+  /** Sube un archivo al registro. Lanza Error con un mensaje para la persona. */
+  const addFile = async (examId: string, a: Attachment, docType: DocType = 'otro') => {
     if (!cloud || !userId) throw new Error('Para guardar archivos necesitas iniciar sesión (nube).');
     const safe = a.name.normalize('NFKD').replace(/[^\w.-]+/g, '_').slice(-80);
     const path = `${userId}/salud/${examId}/${Date.now()}-${safe}`;
@@ -192,7 +205,7 @@ export function useHealth() {
     if (up.error) throw new Error('No pude subir el archivo. Revisa tu conexión.');
     const { data, error } = await supabase
       .from('health_exam_files')
-      .insert({ exam_id: examId, name: a.name.slice(0, 200), mime: a.mimeType, size: a.size ?? body.byteLength, storage_path: path })
+      .insert({ exam_id: examId, name: a.name.slice(0, 200), mime: a.mimeType, size: a.size ?? body.byteLength, storage_path: path, doc_type: docType })
       .select(FILE_COLS)
       .single();
     if (error || !data) {
@@ -209,11 +222,11 @@ export function useHealth() {
     await supabase.from('health_exam_files').delete().eq('id', file.id);
   };
 
-  /** Enlace temporal (10 min) para ver el archivo. */
-  const fileUrl = async (file: ExamFile) => {
-    const { data } = await supabase.storage.from('documentos').createSignedUrl(file.path, 600);
+  /** Enlace temporal (10 min) para ver el archivo; con `download`, el navegador lo descarga con su nombre. */
+  const fileUrl = useCallback(async (file: ExamFile, download = false) => {
+    const { data } = await supabase.storage.from('documentos').createSignedUrl(file.path, 600, download ? { download: file.name } : undefined);
     return data?.signedUrl ?? null;
-  };
+  }, []);
 
   const saveContact = async (input: ContactInput, id?: string) => {
     const row = clean(input);

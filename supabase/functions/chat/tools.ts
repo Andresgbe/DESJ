@@ -4,6 +4,8 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { fetchRates, RATE_CODE_MAP } from '../_shared/dolar.ts';
+
 export type Actions = {
   reminders: { id: string; title: string; body: string; due_at: string; repeat: 'none' | 'daily' }[];
   events: { title: string; start: string; end: string; notes: string }[];
@@ -11,6 +13,7 @@ export type Actions = {
   intakesChanged: boolean;
   knowledgeChanged: boolean;
   tasksChanged: boolean;
+  financeChanged?: boolean;
 };
 
 export const KNOWLEDGE_FILES = ['perfil', 'salud', 'negocios', 'preferencias'];
@@ -20,9 +23,11 @@ export type FileRef = { path: string; name: string; mime: string };
 /** Lo que devuelve una herramienta: texto, o texto más archivos para que Claude los lea. */
 export type ToolOutput = string | { text: string; files: FileRef[] };
 
-const EXAM_KINDS = ['laboratorio', 'imagen', 'consulta', 'otro'];
+const EXAM_KINDS = ['consulta', 'laboratorio', 'imagen', 'procedimiento', 'otro'];
+const EXAM_TITLES: Record<string, string> = { consulta: 'Consulta médica', laboratorio: 'Examen de laboratorio', imagen: 'Estudio de imagen', procedimiento: 'Procedimiento', otro: 'Registro médico' };
+const DOC_TYPES = ['informe', 'orden', 'resultado', 'receta', 'imagen', 'otro'];
 const CONTACT_KINDS = ['doctor', 'clinica', 'laboratorio', 'otro'];
-const MAX_READ_FILES = 3; // archivos de un examen que se le pasan a Claude de una vez
+const MAX_READ_FILES = 3; // archivos de un registro que se le pasan a Claude de una vez
 
 const CATEGORIES = ['personal', 'salud', 'negocios', 'preferencia', 'otro'];
 
@@ -158,42 +163,75 @@ export const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
-    name: 'guardar_examen',
+    name: 'guardar_registro_medico',
     description:
-      'Guarda un examen médico en el módulo Salud de la persona (laboratorio, imagen, consulta). fecha es cuándo se HIZO el examen (YYYY-MM-DD), no la de hoy: tómala del documento o pregúntala. Si la persona mandó el examen como adjunto en este mensaje, usa adjuntar_archivo true para guardarlo junto al examen. En resultados anota los valores principales con sus unidades y rangos de referencia, tal como aparecen; sin interpretar.',
+      'Crea un registro en el historial médico de la persona (módulo Salud): una consulta, un examen de laboratorio, un estudio de imagen o un procedimiento. fecha es cuándo PASÓ (YYYY-MM-DD), no la de hoy salvo que haya sido hoy: tómala del documento o pregúntala. Si ya existe en <historial_medico> un registro de ese día y tipo, no crees otro: usa adjuntar_a_registro_medico. Si la persona mandó archivos en este mensaje, ponlos en archivos con su número y qué es cada uno (informe, orden, receta…). En resultados anota los valores principales con sus unidades y rangos, o las indicaciones del médico, tal como aparecen; sin interpretar.',
     strict: true,
     input_schema: {
       type: 'object',
       properties: {
-        titulo: { type: 'string', description: 'Ej. "Hematología completa", "Perfil lipídico", "Rayos X de tórax".' },
+        titulo: { type: 'string', description: 'Ej. "Consulta de cardiología", "Hematología completa". Cadena vacía para el nombre por defecto ("Consulta médica").' },
         fecha: { type: 'string', description: 'YYYY-MM-DD' },
         tipo: { type: 'string', enum: EXAM_KINDS },
         lugar: { type: 'string', description: 'Clínica o laboratorio; cadena vacía si no se sabe.' },
         doctor: { type: 'string', description: 'Cadena vacía si no se sabe.' },
         resultados: { type: 'string', description: 'Valores principales; cadena vacía si no hay.' },
         notas: { type: 'string', description: 'Cadena vacía si no hay.' },
-        adjuntar_archivo: { type: 'boolean', description: 'true para guardar el adjunto de este mensaje con el examen.' },
+        archivos: {
+          type: 'array',
+          description: 'Archivos de este mensaje a guardar: su número (1, 2, 3… en el orden en que llegaron) y qué es cada uno. Vacía si no hay que guardar archivos.',
+          items: {
+            type: 'object',
+            properties: { numero: { type: 'integer' }, tipo_documento: { type: 'string', enum: DOC_TYPES } },
+            required: ['numero', 'tipo_documento'],
+            additionalProperties: false,
+          },
+        },
       },
-      required: ['titulo', 'fecha', 'tipo', 'lugar', 'doctor', 'resultados', 'notas', 'adjuntar_archivo'],
+      required: ['titulo', 'fecha', 'tipo', 'lugar', 'doctor', 'resultados', 'notas', 'archivos'],
       additionalProperties: false,
     },
   },
   {
-    name: 'leer_examen',
+    name: 'adjuntar_a_registro_medico',
     description:
-      'Abre los archivos (fotos o PDF) de un examen de <examenes> para leerlos. Úsalo cuando la persona pregunte por el contenido de un examen y sus resultados estén "[sin anotar]" o no alcancen. Después de leerlo, si no estaban anotados, guárdalos con anotar_resultados_examen.',
+      'Guarda archivos que la persona mandó en ESTE mensaje dentro de un registro que ya existe en <historial_medico> (p. ej. "guárdalos en la consulta de hoy"), diciendo qué es cada uno.',
     strict: true,
     input_schema: {
       type: 'object',
-      properties: { id: { type: 'string', description: 'El id que aparece en <examenes>.' } },
+      properties: {
+        id: { type: 'string', description: 'El id del registro en <historial_medico>.' },
+        archivos: {
+          type: 'array',
+          description: 'Archivos de este mensaje a guardar: su número (1, 2, 3… en el orden en que llegaron) y qué es cada uno. Vacía si no hay que guardar archivos.',
+          items: {
+            type: 'object',
+            properties: { numero: { type: 'integer' }, tipo_documento: { type: 'string', enum: DOC_TYPES } },
+            required: ['numero', 'tipo_documento'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['id', 'archivos'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'leer_registro_medico',
+    description:
+      'Abre los archivos (fotos o PDF) de un registro de <historial_medico> para leerlos. Úsalo cuando la persona pregunte por el contenido de un informe, orden o examen y sus resultados estén "[sin anotar]" o no alcancen. Después de leerlo, si no estaban anotados, guárdalos con anotar_registro_medico.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string', description: 'El id que aparece en <historial_medico>.' } },
       required: ['id'],
       additionalProperties: false,
     },
   },
   {
-    name: 'anotar_resultados_examen',
+    name: 'anotar_registro_medico',
     description:
-      'Reemplaza los resultados anotados de un examen de <examenes> (valores principales con unidades y rangos de referencia, tal como aparecen en el documento). Conserva lo que ya estaba si sigue siendo correcto.',
+      'Reemplaza los resultados o indicaciones anotados de un registro de <historial_medico> (valores con unidades y rangos de referencia, o indicaciones del médico, tal como aparecen en el documento). Conserva lo que ya estaba si sigue siendo correcto.',
     strict: true,
     input_schema: {
       type: 'object',
@@ -216,6 +254,46 @@ export const TOOLS: Anthropic.Tool[] = [
         detalle: { type: 'string', description: 'Cadena vacía si no hay.' },
       },
       required: ['modulo_id', 'titulo', 'fecha', 'detalle'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'registrar_movimiento',
+    description:
+      'Registra un ingreso o un gasto en Finanzas ("gasté 5$ en el Gama en supermercado", "me pagaron 200$ de la agencia"). Todo se convierte a dólar BCV con la tasa de la forma de pago. moneda: USD, VES (bolívares) o EUR. forma_pago: "BCV" para dólar BCV o bolívares a tasa BCV; "CASH" si fue en dólares en EFECTIVO; "USDT" si fue en USDT; "EUR" si fue en euros. OJO: efectivo, cash o USDT valen distinto que el dólar BCV aunque la moneda sea USD. tasa: cadena vacía para usar la guardada (si falta, se trae de DolarAPI); solo pon un número si la persona dijo la tasa. categoria: nombre de una de <finanzas> (si no existe, se crea). fecha YYYY-MM-DD o cadena vacía para hoy.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: {
+        tipo: { type: 'string', enum: ['gasto', 'ingreso'] },
+        monto: { type: 'number' },
+        moneda: { type: 'string', enum: ['USD', 'VES', 'EUR'] },
+        forma_pago: { type: 'string', enum: ['BCV', 'CASH', 'USDT', 'EUR'] },
+        tasa: { type: 'string', description: 'Cuántas unidades equivalen a 1 $ BCV; cadena vacía para la guardada.' },
+        categoria: { type: 'string', description: 'Cadena vacía si no aplica.' },
+        lugar: { type: 'string' },
+        descripcion: { type: 'string' },
+        fecha: { type: 'string' },
+        nota: { type: 'string' },
+      },
+      required: ['tipo', 'monto', 'moneda', 'forma_pago', 'tasa', 'categoria', 'lugar', 'descripcion', 'fecha', 'nota'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'actualizar_tasas',
+    description: 'Trae de DolarAPI las tasas de hoy (BCV, euro, dólar efectivo, USDT) y las guarda en Finanzas.',
+    strict: true,
+    input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false },
+  },
+  {
+    name: 'fijar_tasa',
+    description: 'Guarda a mano la tasa de una forma de pago (cuántas unidades equivalen a 1 dólar BCV), si la persona la dice. No cambia los movimientos ya registrados.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: { codigo: { type: 'string', enum: ['BCV', 'EUR', 'CASH', 'USDT'] }, por_dolar: { type: 'number' } },
+      required: ['codigo', 'por_dolar'],
       additionalProperties: false,
     },
   },
@@ -243,11 +321,77 @@ export const TOOLS: Anthropic.Tool[] = [
 type Input = Record<string, unknown>;
 const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
 
+const RATE_LABELS: Record<string, { label: string; currency: string }> = {
+  BCV: { label: 'Bolívares (Bs)', currency: 'VES' },
+  EUR: { label: 'Euro', currency: 'EUR' },
+  CASH: { label: 'Dólar efectivo', currency: 'USD' },
+  USDT: { label: 'USDT', currency: 'USD' },
+};
+
+/** Trae las tasas de DolarAPI y guarda (upsert por código) las que vengan. Devuelve código → tasa. */
+async function refreshRates(db: SupabaseClient, userId: string) {
+  const fetched = await fetchRates();
+  const now = new Date().toISOString();
+  const rows = Object.entries(RATE_CODE_MAP)
+    .map(([code, key]) => ({ code, value: fetched[key] }))
+    .filter((x): x is { code: string; value: number } => typeof x.value === 'number' && x.value > 0)
+    .map(({ code, value }) => ({ user_id: userId, code, label: RATE_LABELS[code].label, currency: RATE_LABELS[code].currency, per_usd: value, updated_at: now }));
+  if (!rows.length) throw new Error('DolarAPI respondió, pero sin tasas que pueda usar.');
+  const { error } = await db.from('finance_rates').upsert(rows, { onConflict: 'user_id,code' });
+  if (error) throw error;
+  return Object.fromEntries(rows.map((r) => [r.code, r.per_usd]));
+}
+
+/** Archivos elegidos por número (1…N) entre los adjuntos de este mensaje. Lanza Error si un número no existe. */
+function pickFiles(raw: unknown, attachments: FileRef[]): { file: FileRef; docType: string }[] {
+  const list = Array.isArray(raw) ? raw : [];
+  return list.map((x) => {
+    const item = (x ?? {}) as Record<string, unknown>;
+    const n = Number(item.numero);
+    const file = attachments[n - 1];
+    if (!Number.isInteger(n) || !file) {
+      throw new Error(attachments.length ? `el archivo ${item.numero} no existe; este mensaje trae ${attachments.length}` : 'este mensaje no trae archivos');
+    }
+    return { file, docType: str(item.tipo_documento) };
+  });
+}
+
+/** Guarda los archivos elegidos en el registro y resume qué pasó (" Archivos: informe, orden."). */
+async function attachAll(db: SupabaseClient, userId: string, examId: string, picks: { file: FileRef; docType: string }[]) {
+  if (!picks.length) return '';
+  const ok: string[] = [];
+  const failed: string[] = [];
+  for (const p of picks) {
+    const fail = await attachTo(db, userId, examId, p.file, p.docType);
+    if (fail) failed.push(`${p.file.name} (${fail})`);
+    else ok.push(DOC_TYPES.includes(p.docType) ? p.docType : 'otro');
+  }
+  return `${ok.length ? ` Archivos guardados: ${ok.join(', ')}.` : ''}${failed.length ? ` No pude guardar: ${failed.join('; ')}.` : ''}`;
+}
+
+/** Copia el adjunto del chat a la carpeta del registro y lo anota. Devuelve el error, o null si salió bien. */
+async function attachTo(db: SupabaseClient, userId: string, examId: string, a: FileRef, docType: string): Promise<string | null> {
+  // Se copia (no se mueve): el adjunto sigue existiendo en el chat.
+  if (!a.path.startsWith(`${userId}/`)) return 'adjunto no válido';
+  const to = `${userId}/salud/${examId}/${Date.now()}-${a.path.split('/').pop()}`;
+  const copied = await db.storage.from('documentos').copy(a.path, to);
+  if (copied.error) return copied.error.message;
+  const { error } = await db.from('health_exam_files').insert({
+    user_id: userId,
+    exam_id: examId,
+    name: a.name.slice(0, 200),
+    mime: a.mime,
+    storage_path: to,
+    doc_type: DOC_TYPES.includes(docType) ? docType : 'otro',
+  });
+  return error ? error.message : null;
+}
+
 export async function runTool(
   db: SupabaseClient,
   name: string,
   input: Input,
-  ctx: { today: string; actions: Actions; userId: string; attachment?: FileRef | null },
+  ctx: { today: string; actions: Actions; userId: string; attachments?: FileRef[] },
 ): Promise<ToolOutput> {
   switch (name) {
     case 'actualizar_conocimiento': {
@@ -348,21 +492,20 @@ export async function runTool(
       ctx.actions.medsChanged = true;
       return 'Medicamento agregado.';
     }
-    case 'guardar_examen': {
-      const title = str(input.titulo).slice(0, 200);
+    case 'guardar_registro_medico': {
+      const kind = EXAM_KINDS.includes(str(input.tipo)) ? str(input.tipo) : 'otro';
+      const title = (str(input.titulo) || EXAM_TITLES[kind]).slice(0, 200);
       const date = str(input.fecha);
-      if (!title) throw new Error('titulo vacío');
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(new Date(date).getTime())) throw new Error('fecha debe ser YYYY-MM-DD');
-      if (date > ctx.today) throw new Error('la fecha del examen no puede ser futura');
-      const attach = input.adjuntar_archivo === true;
-      if (attach && !ctx.attachment) throw new Error('este mensaje no trae un archivo adjunto');
+      if (date > ctx.today) throw new Error('la fecha no puede ser futura');
+      const picks = pickFiles(input.archivos, ctx.attachments ?? []);
       const { data: exam, error } = await db
         .from('health_exams')
         .insert({
           user_id: ctx.userId,
           title,
           exam_date: date,
-          kind: EXAM_KINDS.includes(str(input.tipo)) ? str(input.tipo) : 'otro',
+          kind,
           place: str(input.lugar),
           doctor: str(input.doctor),
           results: str(input.resultados).slice(0, 8000),
@@ -371,27 +514,24 @@ export async function runTool(
         .select('id')
         .single();
       if (error) throw error;
-      if (attach && ctx.attachment) {
-        // Se copia (no se mueve): el adjunto sigue existiendo en el chat.
-        const a = ctx.attachment;
-        if (!a.path.startsWith(`${ctx.userId}/`)) throw new Error('adjunto no válido');
-        const to = `${ctx.userId}/salud/${exam.id}/${a.path.split('/').pop()}`;
-        const copied = await db.storage.from('documentos').copy(a.path, to);
-        if (copied.error) return `Examen guardado (id ${exam.id}), pero no pude guardar el archivo: ${copied.error.message}`;
-        const { error: fileError } = await db
-          .from('health_exam_files')
-          .insert({ user_id: ctx.userId, exam_id: exam.id, name: a.name.slice(0, 200), mime: a.mime, storage_path: to });
-        if (fileError) throw fileError;
-      }
-      return `Examen guardado (id ${exam.id}) con fecha ${date}${attach ? ' y su archivo' : ''}.`;
+      const saved = await attachAll(db, ctx.userId, exam.id, picks);
+      return `"${title}" guardado en el historial (id ${exam.id}) con fecha ${date}.${saved}`;
     }
-    case 'leer_examen': {
+    case 'adjuntar_a_registro_medico': {
+      const picks = pickFiles(input.archivos, ctx.attachments ?? []);
+      if (!picks.length) throw new Error('indica qué archivos de este mensaje guardar (archivos: número y tipo)');
+      const { data: exam } = await db.from('health_exams').select('id, title, exam_date').eq('id', str(input.id)).eq('user_id', ctx.userId).maybeSingle();
+      if (!exam) return 'No encontré ese registro.';
+      const saved = await attachAll(db, ctx.userId, exam.id, picks);
+      return `En "${exam.title}" (${exam.exam_date}).${saved}`;
+    }
+    case 'leer_registro_medico': {
       const id = str(input.id);
       const { data: exam } = await db.from('health_exams').select('id, title, exam_date').eq('id', id).eq('user_id', ctx.userId).maybeSingle();
-      if (!exam) return 'No encontré ese examen.';
+      if (!exam) return 'No encontré ese registro.';
       const { data: files, error } = await db
         .from('health_exam_files')
-        .select('name, mime, storage_path')
+        .select('name, mime, storage_path, doc_type')
         .eq('exam_id', id)
         .eq('user_id', ctx.userId)
         .order('created_at')
@@ -399,18 +539,18 @@ export async function runTool(
       if (error) throw error;
       if (!files?.length) return `"${exam.title}" (${exam.exam_date}) no tiene archivos. Pídele a la persona la foto o el PDF.`;
       return {
-        text: `Archivos de "${exam.title}" (${exam.exam_date}):`,
+        text: `Archivos de "${exam.title}" (${exam.exam_date}): ${files.map((f) => `${f.doc_type} "${f.name}"`).join(', ')}`,
         files: files.map((f) => ({ path: f.storage_path, name: f.name, mime: f.mime })),
       };
     }
-    case 'anotar_resultados_examen': {
+    case 'anotar_registro_medico': {
       const { error, count } = await db
         .from('health_exams')
         .update({ results: str(input.resultados).slice(0, 8000) }, { count: 'exact' })
         .eq('id', str(input.id))
         .eq('user_id', ctx.userId);
       if (error) throw error;
-      return count ? 'Resultados anotados en el examen.' : 'No encontré ese examen.';
+      return count ? 'Anotado en el registro.' : 'No encontré ese registro.';
     }
     case 'agregar_registro_modulo': {
       const title = str(input.titulo).slice(0, 200);
@@ -425,6 +565,92 @@ export async function runTool(
         .insert({ user_id: ctx.userId, module_id: mod.id, title, entry_date: date || null, details: str(input.detalle).slice(0, 4000) });
       if (error) throw error;
       return `Registro anotado en ${mod.name}${date ? ` con fecha ${date}` : ''}.`;
+    }
+    case 'registrar_movimiento': {
+      const kind = input.tipo === 'ingreso' ? 'income' : 'expense';
+      const amount = Number(input.monto);
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error('monto debe ser mayor que cero');
+      const currency = ['USD', 'VES', 'EUR'].includes(str(input.moneda)) ? str(input.moneda) : 'USD';
+      let code = str(input.forma_pago).toUpperCase();
+      if (currency === 'VES') code = 'BCV';
+      if (currency === 'EUR') code = 'EUR';
+      const date = str(input.fecha) || ctx.today;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('fecha debe ser YYYY-MM-DD');
+      // Dólar BCV es la referencia (tasa 1). Lo demás necesita tasa: la dicha, la guardada o la de hoy en DolarAPI.
+      const reference = currency === 'USD' && code === 'BCV';
+      let rate = 1;
+      if (!reference) {
+        const given = str(input.tasa) ? Number(str(input.tasa).replace(',', '.')) : NaN;
+        if (Number.isFinite(given) && given > 0) rate = given;
+        else {
+          // La de hoy: si la guardada falta o es de otro día, se traen las del día; si eso falla, sirve la guardada.
+          const { data: saved } = await db.from('finance_rates').select('per_usd, updated_at').eq('user_id', ctx.userId).eq('code', code).maybeSingle();
+          const stored = saved?.per_usd === null || saved?.per_usd === undefined ? NaN : Number(saved.per_usd);
+          const fromToday = String(saved?.updated_at ?? '').slice(0, 10) === ctx.today;
+          if (Number.isFinite(stored) && stored > 0 && fromToday) rate = stored;
+          else {
+            const fresh = await refreshRates(db, ctx.userId).catch(() => ({}) as Record<string, number>);
+            if (fresh[code]) rate = fresh[code];
+            else if (Number.isFinite(stored) && stored > 0) rate = stored;
+            else throw new Error(`no hay tasa ${code} guardada y DolarAPI no respondió; pídele la tasa a la persona`);
+          }
+        }
+      }
+      // Categoría por nombre, sin distinguir mayúsculas; si no existe, se crea con el tipo del movimiento.
+      let categoryId: string | null = null;
+      const catName = str(input.categoria).slice(0, 60);
+      if (catName) {
+        const { data: cats } = await db.from('finance_categories').select('id, name').eq('user_id', ctx.userId);
+        const found = (cats ?? []).find((c) => c.name.toLowerCase() === catName.toLowerCase());
+        if (found) categoryId = found.id;
+        else {
+          const { data: created, error } = await db
+            .from('finance_categories')
+            .insert({ user_id: ctx.userId, name: catName, kind, sort_order: (cats ?? []).length })
+            .select('id')
+            .single();
+          if (error) throw error;
+          categoryId = created.id;
+        }
+      }
+      const amountUsd = amount / rate;
+      const { error } = await db.from('finance_transactions').insert({
+        user_id: ctx.userId,
+        kind,
+        occurred_on: date,
+        description: str(input.descripcion),
+        place: str(input.lugar),
+        category_id: categoryId,
+        amount,
+        currency,
+        rate_per_usd: rate,
+        rate_label: code,
+        amount_usd: amountUsd,
+        note: str(input.nota),
+      });
+      if (error) throw error;
+      ctx.actions.financeChanged = true;
+      return `${kind === 'income' ? 'Ingreso' : 'Gasto'} registrado: ${amount} ${currency}${reference ? '' : ` (${code}, tasa ${rate})`} = ${amountUsd.toFixed(2)} $ BCV, el ${date}${catName ? `, categoría ${catName}` : ''}.`;
+    }
+    case 'actualizar_tasas': {
+      const saved = await refreshRates(db, ctx.userId);
+      ctx.actions.financeChanged = true;
+      return `Tasas guardadas (unidades por 1 $ BCV): ${Object.entries(saved).map(([c, v]) => `${c} ${v.toFixed(4)}`).join(', ')}.`;
+    }
+    case 'fijar_tasa': {
+      const code = str(input.codigo).toUpperCase();
+      const value = Number(input.por_dolar);
+      if (!RATE_LABELS[code]) throw new Error('código de tasa desconocido');
+      if (!Number.isFinite(value) || value <= 0) throw new Error('la tasa tiene que ser mayor que cero');
+      const { error } = await db
+        .from('finance_rates')
+        .upsert(
+          { user_id: ctx.userId, code, label: RATE_LABELS[code].label, currency: RATE_LABELS[code].currency, per_usd: value, updated_at: new Date().toISOString() },
+          { onConflict: 'user_id,code' },
+        );
+      if (error) throw error;
+      ctx.actions.financeChanged = true;
+      return `Tasa ${code} guardada: ${value} por 1 $ BCV. Lo ya registrado no cambia.`;
     }
     case 'guardar_contacto_salud': {
       const name = str(input.nombre).slice(0, 200);

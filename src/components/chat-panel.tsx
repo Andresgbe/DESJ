@@ -1,4 +1,4 @@
-// Conversación con DESJ: texto, adjuntos (foto / archivo), dictado por voz y respuesta en voz. Vive en el Núcleo;
+// Conversación con DESJ: texto, adjuntos (hasta 5 fotos / archivos por mensaje), dictado por voz y respuesta en voz. Vive en el Núcleo;
 // el historial, la conversación nueva y la voz están en el menú hamburguesa (chat-menu.tsx).
 import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
@@ -8,7 +8,7 @@ import { Alert, FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View
 import Svg, { Path } from 'react-native-svg';
 
 import { IconClip, IconClose, IconFile, IconMic, IconStop } from '@/components/icons';
-import { Attachment, pickAttachment } from '@/lib/attachments';
+import { Attachment, MAX_FILES, MAX_TOTAL, pickAttachments } from '@/lib/attachments';
 import { ChatMsg, useChats } from '@/lib/chats';
 import { dictationAvailable, startDictation } from '@/lib/dictation';
 import { C } from '@/theme';
@@ -17,13 +17,13 @@ import { C } from '@/theme';
 export function ChatPanel({ voice }: { voice: boolean }) {
   const { messages, busy, send } = useChats();
   const [input, setInput] = useState('');
-  const [attachment, setAttachment] = useState<Attachment | null>(null);
+  const [files, setFiles] = useState<Attachment[]>([]);
   const [tray, setTray] = useState(false);
   const [listening, setListening] = useState(false);
   const stopListening = useRef<(() => void) | null>(null);
   const list = useRef<FlatList<ChatMsg>>(null);
 
-  const canSend = Boolean(input.trim() || attachment);
+  const canSend = Boolean(input.trim() || files.length);
 
   const notify = (msg: string) => (Platform.OS === 'web' ? window.alert(msg) : Alert.alert('DESJ', msg));
 
@@ -31,19 +31,23 @@ export function ChatPanel({ voice }: { voice: boolean }) {
     const text = input.trim();
     if (!canSend || busy) return;
     stopListening.current?.();
-    const file = attachment;
+    const sending = files;
     setInput('');
-    setAttachment(null);
+    setFiles([]);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const reply = await send(text, file);
+    const reply = await send(text, sending);
     if (reply && voice) Speech.speak(reply, { language: 'es-ES', rate: 1.0 });
   };
 
   const attach = async (source: 'galeria' | 'camara' | 'archivo') => {
     setTray(false);
+    const room = MAX_FILES - files.length;
+    if (room <= 0) return notify(`Puedes adjuntar hasta ${MAX_FILES} archivos por mensaje.`);
     try {
-      const a = await pickAttachment(source);
-      if (a) setAttachment(a);
+      const picked = await pickAttachments(source, room);
+      const total = [...files, ...picked].reduce((sum, f) => sum + (f.size ?? 0), 0);
+      if (total > MAX_TOTAL) return notify('Entre todos los archivos pasan de 18 MB. Envíalos en dos mensajes.');
+      if (picked.length) setFiles((list) => [...list, ...picked].slice(0, MAX_FILES));
     } catch (e) {
       notify(e instanceof Error ? e.message : 'No pude abrir ese archivo.');
     }
@@ -84,12 +88,12 @@ export function ChatPanel({ voice }: { voice: boolean }) {
         onContentSizeChange={() => list.current?.scrollToEnd({ animated: true })}
         renderItem={({ item }) => (
           <View style={item.from === 'me' ? styles.me : styles.bot}>
-            {item.attachment ? (
-              <View style={styles.attached}>
+            {item.attachments?.map((name, i) => (
+              <View key={`${name}${i}`} style={styles.attached}>
                 <IconFile color={C.accentSoft} size={15} />
-                <Text style={styles.attachedName} numberOfLines={1}>{item.attachment}</Text>
+                <Text style={styles.attachedName} numberOfLines={1}>{name}</Text>
               </View>
-            ) : null}
+            ))}
             {item.text ? <Text style={styles.msg}>{item.text}</Text> : null}
           </View>
         )}
@@ -103,21 +107,21 @@ export function ChatPanel({ voice }: { voice: boolean }) {
         </View>
       ) : null}
 
-      {attachment ? (
-        <View style={styles.preview}>
-          {attachment.mimeType.startsWith('image/') ? (
-            <Image source={{ uri: attachment.uri }} style={styles.thumb} contentFit="cover" />
+      {files.map((f, i) => (
+        <View key={`${f.uri}${i}`} style={styles.preview}>
+          {f.mimeType.startsWith('image/') ? (
+            <Image source={{ uri: f.uri }} style={styles.thumb} contentFit="cover" />
           ) : (
             <View style={[styles.thumb, styles.fileThumb]}>
-              <Text style={styles.fileExt}>{(attachment.name.split('.').pop() ?? 'doc').slice(0, 4).toUpperCase()}</Text>
+              <Text style={styles.fileExt}>{(f.name.split('.').pop() ?? 'doc').slice(0, 4).toUpperCase()}</Text>
             </View>
           )}
-          <Text style={styles.previewName} numberOfLines={1}>{attachment.name}</Text>
-          <Pressable onPress={() => setAttachment(null)} hitSlop={10} style={styles.remove} accessibilityRole="button" accessibilityLabel="Quitar adjunto">
+          <Text style={styles.previewName} numberOfLines={1}>{files.length > 1 ? `${i + 1}. ${f.name}` : f.name}</Text>
+          <Pressable onPress={() => setFiles((list) => list.filter((_, j) => j !== i))} hitSlop={10} style={styles.remove} accessibilityRole="button" accessibilityLabel={`Quitar ${f.name}`}>
             <IconClose color={C.muted} />
           </Pressable>
         </View>
-      ) : null}
+      ))}
 
       <View style={[styles.inputBar, listening && styles.inputBarListening]}>
         <Pressable

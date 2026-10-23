@@ -8,9 +8,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { KNOWLEDGE_FILES } from './tools.ts';
 
 export const HISTORY = 20; // mensajes previos que se reenvían
-const MAX_EXAMS = 80; // los más recientes por fecha del examen
+const MAX_EXAMS = 80; // registros del historial médico más recientes (por la fecha en que pasaron)
 const MAX_RESULTS = 800; // caracteres de resultados por examen en el contexto
 const ENTRIES_PER_MODULE = 12; // registros más recientes de cada módulo
+const RECENT_MOVES = 25; // movimientos de finanzas del mes que ve DESJ
 
 // `agenda` la manda el teléfono (eventos de hoy de su calendario); null = sin acceso al calendario.
 export async function loadContext(db: SupabaseClient, userId: string, agenda: unknown, conversationId: string | null) {
@@ -34,7 +35,7 @@ export async function loadContext(db: SupabaseClient, userId: string, agenda: un
       .eq('user_id', userId)
       .order('exam_date', { ascending: false })
       .limit(MAX_EXAMS),
-    db.from('health_exam_files').select('exam_id').eq('user_id', userId).limit(2000),
+    db.from('health_exam_files').select('exam_id, doc_type').eq('user_id', userId).limit(2000),
     db.from('health_contacts').select('id, kind, name, specialty, phone, email, address, notes').eq('user_id', userId).order('name').limit(100),
     db.from('modules').select('id, kind, name, description').eq('user_id', userId).order('position').limit(50),
     db
@@ -56,7 +57,10 @@ export async function loadContext(db: SupabaseClient, userId: string, agenda: un
     .formatToParts(now)
     .find((p) => p.type === 'timeZoneName')?.value.replace('GMT', '') || '+00:00';
 
-  const { data: intakes } = await db.from('med_intakes').select('med_id, dose').eq('user_id', userId).eq('day', today);
+  const [{ data: intakes }, finance] = await Promise.all([
+    db.from('med_intakes').select('med_id, dose').eq('user_id', userId).eq('day', today),
+    loadFinance(db, userId, today),
+  ]);
 
   const lines = [
     '<contexto_usuario>',
@@ -89,9 +93,9 @@ ${doc?.content.trim() || '[vacío: todavía no hay datos]'}
     ...(tasks.data ?? []).map((t) => `- [${t.id}] ${t.due_date ? `(${t.due_date}) ` : ''}${t.title}`),
     '</pendientes>',
     '',
-    '<examenes>',
+    '<historial_medico>',
     ...examLines(exams.data ?? [], examFiles.data ?? []),
-    '</examenes>',
+    '</historial_medico>',
     '',
     '<contactos_salud>',
     ...(contacts.data ?? []).map((c) =>
@@ -102,6 +106,10 @@ ${doc?.content.trim() || '[vacío: todavía no hay datos]'}
     '<modulos>',
     ...moduleLines(modules.data ?? [], entries.data ?? []),
     '</modulos>',
+    '',
+    '<finanzas>',
+    ...finance,
+    '</finanzas>',
     '',
     '<agenda_hoy>',
     ...agendaLines(agenda, tz),
@@ -117,6 +125,52 @@ ${doc?.content.trim() || '[vacío: todavía no hay datos]'}
   return { block: lines.join('\n'), today, history: historyMsgs };
 }
 
+/** Resumen de Finanzas del mes en curso, en dólares BCV: totales, por categoría, tasas y últimos movimientos. */
+async function loadFinance(db: SupabaseClient, userId: string, today: string): Promise<string[]> {
+  const month = today.slice(0, 7);
+  const [y, m] = month.split('-').map(Number);
+  const last = `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
+  const [cats, rates, txs] = await Promise.all([
+    db.from('finance_categories').select('id, name, kind').eq('user_id', userId).order('sort_order'),
+    db.from('finance_rates').select('code, label, per_usd, updated_at').eq('user_id', userId),
+    db
+      .from('finance_transactions')
+      .select('kind, occurred_on, description, place, category_id, amount, currency, rate_label, amount_usd')
+      .eq('user_id', userId)
+      .gte('occurred_on', `${month}-01`)
+      .lte('occurred_on', last)
+      .order('occurred_on', { ascending: false })
+      .order('created_at', { ascending: false }),
+  ]);
+  if (cats.error || rates.error || txs.error) return ['[sin acceso a finanzas]'];
+  const name = (id: string | null) => cats.data.find((c) => c.id === id)?.name ?? 'Sin categoría';
+  let income = 0;
+  let expense = 0;
+  const byCat = new Map<string, number>();
+  for (const t of txs.data) {
+    const usd = Number(t.amount_usd);
+    if (t.kind === 'income') income += usd;
+    else {
+      expense += usd;
+      byCat.set(name(t.category_id), (byCat.get(name(t.category_id)) ?? 0) + usd);
+    }
+  }
+  const usd = (n: number) => n.toFixed(2);
+  return [
+    `Mes ${month} (en $ BCV): ingresos ${usd(income)}, gastos ${usd(expense)}, balance ${usd(income - expense)}.`,
+    `Gastos por categoría: ${[...byCat.entries()].sort((a, b) => b[1] - a[1]).map(([n, v]) => `${n} ${usd(v)}`).join(', ') || 'ninguno'}.`,
+    `Tasas guardadas (unidades por 1 $ BCV): ${rates.data.map((r) => `${r.code} ${r.per_usd === null ? 'sin cargar' : `${Number(r.per_usd)} (${String(r.updated_at).slice(0, 10)})`}`).join(', ') || 'ninguna'}.`,
+    `Categorías: ${cats.data.map((c) => `${c.name} (${c.kind === 'income' ? 'ingreso' : c.kind === 'both' ? 'ambos' : 'gasto'})`).join(', ')}.`,
+    'Últimos movimientos:',
+    ...(txs.data.length
+      ? txs.data.slice(0, RECENT_MOVES).map(
+          (t) =>
+            `- ${t.occurred_on} ${t.kind === 'income' ? '+' : '-'}${usd(Number(t.amount_usd))} $ · ${t.description || t.place || name(t.category_id)} · ${name(t.category_id)}${t.rate_label && t.rate_label !== 'BCV' ? ` · ${Number(t.amount)} ${t.currency} (${t.rate_label})` : t.currency === 'VES' ? ` · ${Number(t.amount)} Bs` : ''}`,
+        )
+      : ['[ninguno este mes]']),
+  ];
+}
+
 type MedRow = { id: string; name: string; dose: string; doses_per_day: number; times: string[] };
 
 /** "- [id] Losartán · 50 mg · 2 veces al día · dosis 1 08:00 (tomada hoy), dosis 2 sin hora (pendiente hoy)". */
@@ -130,12 +184,12 @@ function medLine(m: MedRow, taken: number[]): string {
 
 type ExamRow = { id: string; title: string; exam_date: string; kind: string; place: string; doctor: string; results: string; notes: string };
 
-/** Exámenes del más reciente al más antiguo (por la fecha en que se hicieron), con sus resultados anotados. */
-function examLines(exams: ExamRow[], files: { exam_id: string }[]): string[] {
-  if (!exams.length) return ['[sin exámenes cargados]'];
+/** Historial médico del más reciente al más antiguo (por la fecha en que pasó), con archivos y resultados. */
+function examLines(exams: ExamRow[], files: { exam_id: string; doc_type: string }[]): string[] {
+  if (!exams.length) return ['[historial vacío]'];
   return exams.flatMap((e) => {
-    const n = files.filter((f) => f.exam_id === e.id).length;
-    const head = `- [${e.id}] ${e.exam_date} · ${e.kind} · ${e.title}${e.place ? ` · ${e.place}` : ''}${e.doctor ? ` · ${e.doctor}` : ''} · ${n ? `${n} archivo${n === 1 ? '' : 's'}` : 'sin archivos'}`;
+    const own = files.filter((f) => f.exam_id === e.id).map((f) => f.doc_type);
+    const head = `- [${e.id}] ${e.exam_date} · ${e.kind} · ${e.title}${e.place ? ` · ${e.place}` : ''}${e.doctor ? ` · ${e.doctor}` : ''} · ${own.length ? `archivos: ${own.join(', ')}` : 'sin archivos'}`;
     const results = e.results.replace(/\s+/g, ' ').trim();
     const notes = e.notes.replace(/\s+/g, ' ').trim();
     return [

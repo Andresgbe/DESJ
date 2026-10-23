@@ -30,15 +30,15 @@ const QUEUE_OFFLINE_MS = 25_000; // si nadie toma el mensaje en este tiempo, el 
 const QUEUE_TIMEOUT_MS = 200_000;
 
 /** Envía el mensaje a DESJ (con la agenda de hoy) y ejecuta en el teléfono lo que haya decidido. */
-export async function askDesj(text: string, conversationId: string | null, mode: Mode = 'chat', attachment?: Uploaded): Promise<AskResult> {
+export async function askDesj(text: string, conversationId: string | null, mode: Mode = 'chat', attachments: Uploaded[] = []): Promise<AskResult> {
   const agenda = await getTodayAgenda().catch(() => null);
   const { data: auth } = await supabase.auth.getSession();
   const userId = auth.session?.user.id;
   if (!userId) return failure('Tu sesión expiró. Vuelve a entrar.', conversationId);
   const { data: profile } = await supabase.from('profiles').select('brain').eq('id', userId).single();
   return profile?.brain === 'api'
-    ? askApi(text, conversationId, mode, agenda, attachment)
-    : askQueue(text, conversationId, mode, agenda, attachment);
+    ? askApi(text, conversationId, mode, agenda, attachments)
+    : askQueue(text, conversationId, mode, agenda, attachments);
 }
 
 const failure = (reply: string, conversationId: string | null): AskResult => ({
@@ -49,9 +49,9 @@ const failure = (reply: string, conversationId: string | null): AskResult => ({
   failed: true,
 });
 
-async function askApi(text: string, conversationId: string | null, mode: Mode, agenda: unknown, attachment?: Uploaded): Promise<AskResult> {
+async function askApi(text: string, conversationId: string | null, mode: Mode, agenda: unknown, attachments: Uploaded[]): Promise<AskResult> {
   const { data, error } = await supabase.functions.invoke<ChatReply>('chat', {
-    body: { message: text, agenda, conversation_id: conversationId, mode, attachment },
+    body: { message: text, agenda, conversation_id: conversationId, mode, attachments },
   });
   if (error || !data) {
     let msg = 'No pude conectarme. Revisa tu internet e intenta de nuevo.';
@@ -66,10 +66,10 @@ async function askApi(text: string, conversationId: string | null, mode: Mode, a
 }
 
 /** Motor 'worker': deja el mensaje en la cola y espera la respuesta del computador de Andrés. */
-async function askQueue(text: string, conversationId: string | null, mode: Mode, agenda: unknown, attachment?: Uploaded): Promise<AskResult> {
+async function askQueue(text: string, conversationId: string | null, mode: Mode, agenda: unknown, attachments: Uploaded[]): Promise<AskResult> {
   let convId = conversationId;
   if (!convId) {
-    const clean = (text || attachment?.name || 'Archivo').replace(/\s+/g, ' ').trim();
+    const clean = (text || attachments[0]?.name || 'Archivo').replace(/\s+/g, ' ').trim();
     const title = clean.length > 60 ? `${clean.slice(0, 57).trimEnd()}…` : clean;
     const { data, error } = await supabase.from('conversations').insert({ title, kind: mode }).select('id').single();
     if (error || !data) return failure('No pude conectarme. Revisa tu internet e intenta de nuevo.', null);
@@ -81,12 +81,14 @@ async function askQueue(text: string, conversationId: string | null, mode: Mode,
     .insert({
       conversation_id: convId,
       role: 'user',
-      content: attachment ? [text, `[Adjunto: ${attachment.name}]`].filter(Boolean).join('\n') : text,
+      content: [text, ...attachments.map((a) => `[Adjunto: ${a.name}]`)].filter(Boolean).join('\n'),
       status: 'pending',
       context: { agenda },
-      attachment_path: attachment?.path ?? null,
-      attachment_name: attachment?.name ?? null,
-      attachment_mime: attachment?.mime ?? null,
+      attachments: attachments.length ? attachments : null,
+      // El primero también va en las columnas viejas, por compatibilidad.
+      attachment_path: attachments[0]?.path ?? null,
+      attachment_name: attachments[0]?.name ?? null,
+      attachment_mime: attachments[0]?.mime ?? null,
     })
     .select('id, created_at')
     .single();

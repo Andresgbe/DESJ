@@ -1,14 +1,14 @@
-// YO · Salud · Examen: detalle de un examen, sus archivos (ver, agregar, quitar), editar y borrar.
-import * as WebBrowser from 'expo-web-browser';
+// YO · Salud · Historial: detalle de un registro (consulta, examen, estudio): datos, archivos por tipo
+// (informes, órdenes, recetas…) con vista previa y descarga, agregar archivos, editar y borrar.
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Btn } from '@/components/form';
-import { ExamForm, FileLine, FilePicker } from '@/components/health';
+import { ExamForm, FileCard, FilePicker } from '@/components/health';
 import { Card, Label, Row, Screen, Title } from '@/components/ui';
 import { confirm, notify } from '@/lib/confirm';
-import { EXAM_KINDS, ExamFile, formatDate, since, useHealth } from '@/lib/health';
+import { DOC_TYPES, EXAM_KINDS, ExamFile, formatDate, since, useHealth } from '@/lib/health';
 import { C } from '@/theme';
 
 export default function ExamDetail() {
@@ -26,24 +26,18 @@ export default function ExamDetail() {
 
   if (!exam) {
     return (
-      <Screen module="Salud · Examen" back>
-        <Text style={styles.caption}>{ready ? 'Este examen ya no existe.' : 'Cargando…'}</Text>
+      <Screen module="Salud · Historial" back>
+        <Text style={styles.caption}>{ready ? 'Este registro ya no existe.' : 'Cargando…'}</Text>
       </Screen>
     );
   }
 
-  const open = async (f: ExamFile) => {
-    const url = await fileUrl(f);
-    if (!url) return notify('No pude abrir el archivo. Revisa tu conexión.');
-    await WebBrowser.openBrowserAsync(url);
-  };
-
   const removeOne = async (f: ExamFile) => {
-    if (await confirm('Quitar archivo', `¿Quitar "${f.name}" de este examen?`, 'Quitar')) void removeFile(f);
+    if (await confirm('Quitar archivo', `¿Quitar "${f.name}" de este registro?`, 'Quitar')) void removeFile(f);
   };
 
   const removeAll = async () => {
-    if (!(await confirm('Borrar examen', `¿Borrar "${exam.title}" y sus archivos? No se puede deshacer.`, 'Borrar'))) return;
+    if (!(await confirm('Borrar registro', `¿Borrar "${exam.title}" y sus archivos? No se puede deshacer.`, 'Borrar'))) return;
     await removeExam(exam.id);
     router.back();
   };
@@ -51,7 +45,7 @@ export default function ExamDetail() {
   const kind = EXAM_KINDS.find((k) => k.id === exam.kind)?.label ?? '';
 
   return (
-    <Screen module="Salud · Examen" back>
+    <Screen module="Salud · Historial" back>
       <View style={{ gap: 4 }}>
         <Label>{`${kind} · ${formatDate(exam.date)} · ${since(exam.date)}`}</Label>
         <Title>{exam.title}</Title>
@@ -70,7 +64,7 @@ export default function ExamDetail() {
         <Card>
           <Item label="Clínica o laboratorio" value={exam.place} />
           <Item label="Doctor" value={exam.doctor} />
-          <Item label="Resultados" value={exam.results} hint="Pídele a DESJ en el chat que lea el archivo y los anote." />
+          <Item label="Resultados o indicaciones" value={exam.results} hint="Pídele a DESJ en el chat que lea los archivos y los anote." />
           {exam.notes ? <Item label="Notas" value={exam.notes} /> : null}
         </Card>
       )}
@@ -78,16 +72,17 @@ export default function ExamDetail() {
       {cloud ? (
         <View style={{ gap: 8 }}>
           <Label>Archivos</Label>
-          {exam.files.length === 0 ? <Text style={styles.caption}>Sin archivos. Agrega la foto o el PDF del examen.</Text> : null}
-          {exam.files.map((f) => (
-            <FileLine key={f.id} name={f.name} onPress={() => open(f)} onRemove={() => removeOne(f)} />
+          {exam.files.length === 0 ? <Text style={styles.caption}>Sin archivos. Agrega el informe, la orden o la receta (foto o PDF).</Text> : null}
+          {[...exam.files].sort((a, b) => DOC_TYPES.findIndex((d) => d.id === a.docType) - DOC_TYPES.findIndex((d) => d.id === b.docType)).map((f) => (
+            <FileCard key={f.id} file={f} getUrl={fileUrl} onRemove={() => removeOne(f)} />
           ))}
+          <Label style={{ marginTop: 6 }}>Agregar archivo</Label>
           <FilePicker
             disabled={uploading}
-            onPick={async (a) => {
+            onPick={async (a, docType) => {
               setUploading(true);
               try {
-                await addFile(exam.id, a);
+                await addFile(exam.id, a, docType);
               } catch (e) {
                 notify(e instanceof Error ? e.message : 'No pude subir el archivo.');
               } finally {
@@ -104,14 +99,14 @@ export default function ExamDetail() {
       <Card>
         <Label>Pregúntale a DESJ</Label>
         <Text style={styles.caption}>
-          {`"Lee mi examen de ${exam.title} y anota los resultados" o "¿cómo ha cambiado mi colesterol?". DESJ ordena y compara con rangos de referencia; no diagnostica.`}
+          {`"Lee el informe de ${exam.title.toLowerCase()} del ${formatDate(exam.date)} y anota lo importante" o "¿cómo ha cambiado mi colesterol?". DESJ ordena y compara con rangos de referencia; no diagnostica.`}
         </Text>
       </Card>
 
       {!editing ? (
         <Row>
           <Btn label="Editar" kind="outline" onPress={() => setEditing(true)} />
-          <Btn label="Borrar examen" kind="danger" onPress={removeAll} />
+          <Btn label="Borrar registro" kind="danger" onPress={removeAll} />
         </Row>
       ) : null}
     </Screen>

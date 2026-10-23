@@ -1,5 +1,5 @@
-// YO · Salud: tus pastillas del día con recordatorios, tus exámenes médicos en una línea de tiempo (por la fecha en que se hicieron, no por cuándo
-// se cargaron) y tus contactos de salud. Se abre desde el módulo YO.
+// YO · Salud: tus pastillas del día con recordatorios, tu historial médico (consultas, exámenes y estudios con sus
+// informes, órdenes y recetas, por año y mes según cuándo pasaron) y tus contactos de salud. Se abre desde YO.
 import * as Haptics from 'expo-haptics';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -10,16 +10,19 @@ import { ContactCard, ContactForm, ExamForm, ExamRow } from '@/components/health
 import { IconCheck, IconPlus } from '@/components/icons';
 import { Card, HudRing, Label, Mono, Row, Screen, Title } from '@/components/ui';
 import { confirm, notify } from '@/lib/confirm';
-import { Contact, since, useHealth } from '@/lib/health';
+import { Contact, ExamKind, since, useHealth } from '@/lib/health';
 import { doseKey, doseLabel, dosesToday, MAX_DOSES, MedInput, parseTime, today, useStore } from '@/lib/store';
-import { C, R } from '@/theme';
+import { C, mono, R } from '@/theme';
 
-type Tab = 'examenes' | 'pastillas' | 'contactos';
+type Tab = 'pastillas' | 'historial' | 'examenes' | 'contactos';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'pastillas', label: 'Pastillas' },
+  { id: 'historial', label: 'Historial' },
   { id: 'examenes', label: 'Exámenes' },
   { id: 'contactos', label: 'Contactos' },
 ];
+// Exámenes es una vista del mismo historial: solo laboratorio e imagen.
+const EXAM_ONLY: ExamKind[] = ['laboratorio', 'imagen'];
 
 export default function Salud() {
   const params = useLocalSearchParams<{ tab?: Tab }>();
@@ -27,7 +30,7 @@ export default function Salud() {
   const health = useHealth();
   const { reload } = health;
 
-  // DESJ también crea exámenes y contactos desde el chat: se relee al volver a la pantalla.
+  // DESJ también guarda registros, archivos y contactos desde el chat: se relee al volver a la pantalla.
   useFocusEffect(
     useCallback(() => {
       void reload();
@@ -41,24 +44,34 @@ export default function Salud() {
         <Title accent="salud">Tu</Title>
       </View>
       <Choice options={TABS} value={tab} onChange={setTab} />
-      {tab === 'examenes' ? <Exams health={health} /> : tab === 'pastillas' ? <Pills /> : <Contacts health={health} />}
+      {tab === 'pastillas' ? <Pills /> : null}
+      {tab === 'historial' ? <Exams health={health} /> : null}
+      {tab === 'examenes' ? <Exams health={health} only={EXAM_ONLY} /> : null}
+      {tab === 'contactos' ? <Contacts health={health} /> : null}
     </Screen>
   );
 }
 
 type Health = ReturnType<typeof useHealth>;
 
-function Exams({ health }: { health: Health }) {
-  const { exams, ready, cloud, saveExam, addFile } = health;
+const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+/** Historial médico (o solo exámenes, con `only`): año → mes → registros del día, lo más reciente primero. */
+function Exams({ health, only }: { health: Health; only?: ExamKind[] }) {
+  const { ready, cloud, saveExam, addFile } = health;
+  const exams = only ? health.exams.filter((e) => only.includes(e.kind)) : health.exams;
   const [adding, setAdding] = useState(false);
 
-  // Agrupados por año; dentro de cada año, el más reciente primero.
-  const years: { year: string; items: typeof exams }[] = [];
+  // `exams` ya viene del más reciente al más antiguo: se agrupa conservando ese orden.
+  const years: { year: string; months: { month: number; items: typeof exams }[] }[] = [];
   for (const e of exams) {
     const year = e.date.slice(0, 4);
-    const group = years.find((g) => g.year === year);
-    if (group) group.items.push(e);
-    else years.push({ year, items: [e] });
+    const month = Number(e.date.slice(5, 7));
+    let y = years.find((g) => g.year === year);
+    if (!y) years.push((y = { year, months: [] }));
+    const m = y.months.find((g) => g.month === month);
+    if (m) m.items.push(e);
+    else y.months.push({ month, items: [e] });
   }
 
   return (
@@ -66,45 +79,53 @@ function Exams({ health }: { health: Health }) {
       {adding ? (
         <ExamForm
           withFiles={cloud}
+          defaultKind={only?.[0]}
           onCancel={() => setAdding(false)}
           onSave={async (input, files) => {
             const id = await saveExam(input);
-            if (!id) return notify('No pude guardar el examen. Revisa tu conexión e intenta de nuevo.');
+            if (!id) return notify('No pude guardar el registro. Revisa tu conexión e intenta de nuevo.');
             const failed: string[] = [];
             for (const f of files) {
               try {
-                await addFile(id, f);
+                await addFile(id, f.file, f.docType);
               } catch {
-                failed.push(f.name);
+                failed.push(f.file.name);
               }
             }
             setAdding(false);
-            if (failed.length) notify(`El examen quedó guardado, pero no pude subir: ${failed.join(', ')}. Ábrelo para intentar de nuevo.`);
+            if (failed.length) notify(`El registro quedó guardado, pero no pude subir: ${failed.join(', ')}. Ábrelo para intentar de nuevo.`);
           }}
         />
       ) : (
-        <Btn label="Agregar examen" kind="outline" icon={<IconPlus color={C.chipText} />} onPress={() => setAdding(true)} />
+        <Btn label={only ? 'Agregar examen' : 'Agregar consulta o examen'} kind="outline" icon={<IconPlus color={C.chipText} />} onPress={() => setAdding(true)} />
       )}
 
-      {!cloud ? <Text style={styles.caption}>Sin nube: los exámenes se guardan solo en este teléfono y sin archivos.</Text> : null}
+      {!cloud ? <Text style={styles.caption}>Sin nube: el historial se guarda solo en este teléfono y sin archivos.</Text> : null}
 
       {ready && exams.length === 0 && !adding ? (
         <Card>
-          <Label>Sin exámenes todavía</Label>
+          <Label>{only ? 'Sin exámenes todavía' : 'Tu historial está vacío'}</Label>
           <Text style={styles.caption}>
-            Agrega tus exámenes con la fecha en que te los hiciste; DESJ los ordena solo. También puedes mandarle la foto o el PDF por el chat y pedirle que lo guarde.
+            {only
+              ? 'Aquí quedan juntos tus exámenes de laboratorio y estudios de imagen, por fecha. También aparecen en el Historial.'
+              : 'Guarda aquí cada consulta, examen o estudio con su fecha, y dentro sus informes, órdenes y recetas. También puedes mandarle el informe a DESJ por el chat y pedirle que lo guarde.'}
           </Text>
         </Card>
       ) : null}
 
-      {years.map((g) => (
-        <View key={g.year} style={{ gap: 8 }}>
-          <Row>
-            <Label style={{ color: C.accentSoft }}>{g.year}</Label>
-            <Label>{since(g.items[0].date)}</Label>
+      {years.map((y) => (
+        <View key={y.year} style={{ gap: 10 }}>
+          <Row style={styles.yearRow}>
+            <Text style={styles.year}>{y.year}</Text>
+            <Label>{since(y.months[0].items[0].date)}</Label>
           </Row>
-          {g.items.map((e) => (
-            <ExamRow key={e.id} exam={e} onPress={() => router.push({ pathname: '/yo/examen/[id]', params: { id: e.id } })} />
+          {y.months.map((m) => (
+            <View key={m.month} style={{ gap: 8 }}>
+              <Label style={{ color: C.accentSoft }}>{`${MONTHS[m.month - 1]} ${y.year}`}</Label>
+              {m.items.map((e) => (
+                <ExamRow key={e.id} exam={e} onPress={() => router.push({ pathname: '/yo/examen/[id]', params: { id: e.id } })} />
+              ))}
+            </View>
           ))}
         </View>
       ))}
@@ -295,6 +316,8 @@ function MedForm({ onSave, onCancel }: { onSave: (m: MedInput) => Promise<void>;
 
 const styles = StyleSheet.create({
   big: { color: C.text, fontSize: 18, fontWeight: '600' },
+  yearRow: { borderBottomWidth: 1, borderBottomColor: C.cardBorder, paddingBottom: 4, marginTop: 4 },
+  year: { fontFamily: mono, fontSize: 20, fontWeight: '600', color: C.text, letterSpacing: 1 },
   name: { color: C.text, fontSize: 15, fontWeight: '600' },
   caption: { color: C.muted, fontSize: 12.5, lineHeight: 18 },
   btn: { minWidth: 92, height: 44, borderRadius: R.pill, flexDirection: 'row', gap: 5, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },

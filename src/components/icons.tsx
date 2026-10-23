@@ -190,3 +190,19 @@ export const IconArrowDown = ({ color, size = 18 }: P) => (
     <Path d="M12 5v14M6 13l6 6 6-6" />
   </Svg>
 );
+
+// Acciones de fila (Finanzas).
+export const IconPencil = ({ color, size = 16 }: P) => (
+  <Svg {...base(size, color)}>
+    <Path d="M4 20h4L19 9l-4-4L4 16v4z" />
+    <Path d="M13.5 6.5l4 4" />
+  </Svg>
+);
+
+export const IconTrash = ({ color, size = 16 }: P) => (
+  <Svg {...base(size, color)}>
+    <Path d="M4 7h16" />
+    <Path d="M9 7V4h6v3" />
+    <Path d="M6 7l1 13h10l1-13" />
+  </Svg>
+);

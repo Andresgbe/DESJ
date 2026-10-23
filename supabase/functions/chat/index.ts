@@ -17,6 +17,7 @@ import { Actions, runTool, TOOLS } from './tools.ts';
 
 const MODEL = Deno.env.get('CLAUDE_MODEL') ?? 'claude-sonnet-5';
 const MAX_STEPS = 6; // vueltas máximas de herramientas por mensaje
+const MAX_FILES = 5; // archivos por mensaje
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -45,31 +46,35 @@ Deno.serve(async (req) => {
   let agenda: unknown = null;
   let conversationId: string | null = null;
   let mode: 'chat' | 'conocimiento' = 'chat';
-  let attachment: { path: string; name: string; mime: string } | null = null;
+  let attachments: { path: string; name: string; mime: string }[] = [];
   try {
     const body = await req.json();
     message = String(body.message ?? '').trim();
     agenda = body.agenda ?? null;
     conversationId = typeof body.conversation_id === 'string' && body.conversation_id ? body.conversation_id : null;
     if (body.mode === 'conocimiento') mode = 'conocimiento';
-    const a = body.attachment;
-    if (a && typeof a.path === 'string' && typeof a.name === 'string' && typeof a.mime === 'string') {
-      attachment = { path: a.path, name: a.name.slice(0, 200), mime: a.mime };
+    // `attachments` (hasta 5); `attachment` es el formato de versiones anteriores de la app.
+    const raw: unknown[] = Array.isArray(body.attachments) ? body.attachments : body.attachment ? [body.attachment] : [];
+    for (const a of raw) {
+      const f = (a ?? {}) as Record<string, unknown>;
+      if (typeof f.path === 'string' && typeof f.name === 'string' && typeof f.mime === 'string') attachments.push({ path: f.path, name: f.name.slice(0, 200), mime: f.mime });
     }
   } catch {
     // cuerpo inválido: se responde abajo
   }
-  if ((!message && !attachment) || message.length > 4000) return json({ error: 'Mensaje vacío o demasiado largo' }, 400);
+  if ((!message && !attachments.length) || message.length > 4000) return json({ error: 'Mensaje vacío o demasiado largo' }, 400);
+  if (attachments.length > MAX_FILES) return json({ error: `Puedes enviar hasta ${MAX_FILES} archivos por mensaje.` }, 400);
 
-  // Adjunto: solo de la carpeta del propio usuario (Storage también lo exige por RLS).
-  let fileBlock: Anthropic.ContentBlockParam | null = null;
-  if (attachment) {
-    if (!attachment.path.startsWith(`${auth.user.id}/`)) return json({ error: 'Adjunto no válido' }, 403);
-    const loaded = await loadAttachment(db, attachment);
-    if ('error' in loaded) return json({ error: loaded.error }, 400);
-    fileBlock = loaded.block;
+  // Adjuntos: solo de la carpeta del propio usuario (Storage también lo exige por RLS). Van numerados para
+  // que Claude pueda decir cuál guardar y qué es cada uno.
+  const fileBlocks: Anthropic.ContentBlockParam[] = [];
+  for (const [i, a] of attachments.entries()) {
+    if (!a.path.startsWith(`${auth.user.id}/`)) return json({ error: 'Adjunto no válido' }, 403);
+    const loaded = await loadAttachment(db, a);
+    if ('error' in loaded) return json({ error: `${a.name}: ${loaded.error}` }, 400);
+    fileBlocks.push({ type: 'text', text: `Archivo ${i + 1}: "${a.name}" (${a.mime})` }, loaded.block);
   }
-  const savedText = attachment ? [message, `[Adjunto: ${attachment.name}]`].filter(Boolean).join('\n') : message;
+  const savedText = [message, ...attachments.map((a) => `[Adjunto: ${a.name}]`)].filter(Boolean).join('\n');
 
   // Conversación existente: RLS garantiza que sea del usuario. Si no hay, se crea al guardar.
   if (conversationId) {
@@ -81,9 +86,8 @@ Deno.serve(async (req) => {
   const actions: Actions = { reminders: [], events: [], medsChanged: false, intakesChanged: false, knowledgeChanged: false, tasksChanged: false };
   const client = new Anthropic({ apiKey });
 
-  const userContent: Anthropic.ContentBlockParam[] | string = fileBlock
-    ? [fileBlock, { type: 'text', text: message || `Te envío "${attachment!.name}". Revísalo y dime lo importante.` }]
-    : message;
+  const fallback = attachments.length === 1 ? `Te envío "${attachments[0].name}". Revísalo y dime lo importante.` : `Te envío ${attachments.length} archivos. Revísalos y dime lo importante.`;
+  const userContent: Anthropic.ContentBlockParam[] | string = fileBlocks.length ? [...fileBlocks, { type: 'text', text: message || fallback }] : message;
   const messages: Anthropic.MessageParam[] = [...ctx.history, { role: 'user', content: userContent }];
   const system: Anthropic.TextBlockParam[] = [
     { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
@@ -123,9 +127,9 @@ Deno.serve(async (req) => {
       const results: Anthropic.ToolResultBlockParam[] = await Promise.all(
         toolUses.map(async (t) => {
           try {
-            const out = await runTool(db, t.name, t.input as Record<string, unknown>, { today: ctx.today, actions, userId: auth.user!.id, attachment });
+            const out = await runTool(db, t.name, t.input as Record<string, unknown>, { today: ctx.today, actions, userId: auth.user!.id, attachments });
             if (typeof out === 'string') return { type: 'tool_result' as const, tool_use_id: t.id, content: out };
-            // leer_examen: los archivos van dentro del resultado como imagen o documento.
+            // leer_registro_medico: los archivos van dentro del resultado como imagen o documento.
             const content: Anthropic.ToolResultBlockParam['content'] = [{ type: 'text', text: out.text }];
             for (const f of out.files) {
               const loaded = await loadAttachment(db, f);
@@ -151,7 +155,7 @@ Deno.serve(async (req) => {
 
   let title: string | null = null;
   if (!conversationId) {
-    title = makeTitle(message || attachment?.name || 'Archivo');
+    title = makeTitle(message || attachments[0]?.name || 'Archivo');
     const { data: conv, error } = await db.from('conversations').insert({ title, kind: mode }).select('id').single();
     if (error) console.error('crear conversación', error);
     conversationId = conv?.id ?? null;

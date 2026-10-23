@@ -138,7 +138,7 @@ export default function Yo() {
       <ModuleRow
         tag="03.2"
         title="Finanzas"
-        sub="Tus finanzas personales"
+        sub="Ingresos, gastos, deudas y presupuesto"
         href="/yo/finanzas"
       />
       <ModuleRow
