@@ -4,12 +4,14 @@
 // - POST { action: 'exchange', code }  (con sesión) → cambia el código por el acceso y lo guarda en
 //   google_accounts con la sesión de la persona (RLS: solo su fila).
 // - POST { action: 'disconnect' }      (con sesión) → revoca el acceso en Google y borra la fila.
+// - POST { action: 'events', from, to } / 'create' / 'delete'  (con sesión) → Google Calendar de la persona,
+//   para la pestaña Calendario de la app (que no puede hablar con Google directo: el refresco necesita el secreto).
 // Se despliega con verify_jwt desactivado porque Google no manda sesión en el GET; los POST la validan aquí.
 // Secretos: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET; opcional APP_URL (por defecto https://desj.expo.app).
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from '@supabase/supabase-js';
 
-import { GOOGLE_SCOPES } from '../_shared/google.ts';
+import { calendarDelete, calendarInsert, calendarList, GOOGLE_SCOPES, googleToken } from '../_shared/google.ts';
 
 const APP_URL = Deno.env.get('APP_URL') ?? 'https://desj.expo.app';
 const SELF_URL = `${Deno.env.get('SUPABASE_URL')}/functions/v1/google-auth`;
@@ -88,6 +90,50 @@ Deno.serve(async (req) => {
     if (acc?.refresh_token) await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(acc.refresh_token)}`, { method: 'POST' }).catch(() => null);
     await db.from('google_accounts').delete().eq('user_id', auth.user.id);
     return json({ ok: true });
+  }
+
+  if (body.action === 'events' || body.action === 'create' || body.action === 'delete') {
+    let token: string;
+    try {
+      token = await googleToken(db, auth.user.id);
+    } catch (e) {
+      return json({ error: e instanceof Error ? e.message : 'Google no está conectado.', connected: false }, 409);
+    }
+    try {
+      if (body.action === 'events') {
+        const from = String(body.from ?? '');
+        const to = String(body.to ?? '');
+        if (Number.isNaN(Date.parse(from)) || Number.isNaN(Date.parse(to))) return json({ error: 'Fechas inválidas' }, 400);
+        const items = await calendarList(token, new Date(from).toISOString(), new Date(to).toISOString(), 250);
+        return json({
+          events: items.map((e) => ({
+            id: e.id,
+            title: e.summary ?? '(sin título)',
+            start: e.start?.dateTime ?? e.start?.date ?? '',
+            end: e.end?.dateTime ?? e.end?.date ?? '',
+            allDay: !e.start?.dateTime,
+            location: e.location ?? null,
+            colorId: e.colorId ?? null,
+          })),
+        });
+      }
+      if (body.action === 'create') {
+        const { data: profile } = await db.from('profiles').select('timezone').eq('id', auth.user.id).maybeSingle();
+        const ev = await calendarInsert(token, {
+          title: String(body.title ?? '').slice(0, 300),
+          start: String(body.start),
+          end: String(body.end),
+          location: String(body.location ?? ''),
+          description: String(body.description ?? ''),
+          timeZone: profile?.timezone || 'America/Caracas',
+        });
+        return json({ id: ev.id ?? null });
+      }
+      await calendarDelete(token, String(body.id ?? ''));
+      return json({ ok: true });
+    } catch (e) {
+      return json({ error: e instanceof Error ? e.message : 'Google no respondió.' }, 502);
+    }
   }
 
   return json({ error: 'Acción desconocida' }, 400);

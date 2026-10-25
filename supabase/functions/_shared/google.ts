@@ -195,12 +195,20 @@ export async function gmailSend(
 
 // ---------------------------------------------------------------- Calendar
 
-type GEvent = { summary?: string; location?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string }; htmlLink?: string };
+export type GEvent = { id?: string; colorId?: string; summary?: string; location?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string }; htmlLink?: string };
 
-export async function calendarList(token: string, fromIso: string, toIso: string) {
-  const qs = new URLSearchParams({ timeMin: fromIso, timeMax: toIso, singleEvents: 'true', orderBy: 'startTime', maxResults: '50' });
+export async function calendarList(token: string, fromIso: string, toIso: string, max = 50) {
+  const qs = new URLSearchParams({ timeMin: fromIso, timeMax: toIso, singleEvents: 'true', orderBy: 'startTime', maxResults: String(max) });
   const res = await call<{ items?: GEvent[] }>(token, `https://www.googleapis.com/calendar/v3/calendars/primary/events?${qs}`);
   return res.items ?? [];
+}
+
+export async function calendarDelete(token: string, id: string) {
+  const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok && res.status !== 410) throw new Error(`Google respondió ${res.status} al borrar el evento.`);
 }
 
 export async function calendarInsert(token: string, ev: { title: string; start: string; end: string; location: string; description: string; timeZone: string }) {

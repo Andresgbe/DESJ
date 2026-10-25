@@ -1,6 +1,7 @@
 // Módulos (pestaña MÓDULOS): cada persona agrega, quita y ordena módulos de un CATÁLOGO cerrado. Cada tipo
-// tiene su propia vista y sus datos: hoy Negocios (uno por persona) y Vehículo (uno por carro o moto, con su
-// ficha, mantenimientos y papeles en lib/vehicles.ts).
+// tiene su propia vista y sus datos: hoy Negocios (uno por persona), Vehículo (uno por carro o moto, con su
+// ficha, mantenimientos y papeles en lib/vehicles.ts) NO MORE (uno por persona, con PIN; lib/nomore.ts)
+// y TO BUY (lista de compras con categorías; lib/tobuy.ts).
 // - Con sesión: viven en Supabase (privados por usuario). DESJ los ve desde el chat.
 // - Sin nube: viven en el teléfono; la primera vez se arranca con Negocios.
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -9,7 +10,7 @@ import { useCallback, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 
-export type ModuleKind = 'negocios' | 'vehiculo';
+export type ModuleKind = 'negocios' | 'vehiculo' | 'nomore' | 'tobuy';
 
 /** El catálogo: lo que se puede agregar. `multiple`: se puede tener más de uno (un vehículo por carro). */
 export const CATALOG: { kind: ModuleKind; label: string; description: string; multiple: boolean }[] = [
@@ -19,6 +20,18 @@ export const CATALOG: { kind: ModuleKind; label: string; description: string; mu
     label: 'Vehículo',
     description: 'Ficha, kilometraje, mantenimientos con aviso del próximo, y papeles (seguro, revisión, título) con su vencimiento.',
     multiple: true,
+  },
+  {
+    kind: 'nomore',
+    label: 'No more',
+    description: 'Cuenta los días sin lo que estás dejando (fumar, alcohol, lujuria…), con mensajes de aliento y versículos. Protegido con PIN.',
+    multiple: false,
+  },
+  {
+    kind: 'tobuy',
+    label: 'To buy',
+    description: 'Lista de compras por categorías: marcas lo que compraste y queda en Completado.',
+    multiple: false,
   },
 ];
 export const catalogOf = (kind: ModuleKind) => CATALOG.find((c) => c.kind === kind)!;
@@ -92,7 +105,7 @@ export function useModules() {
     return true;
   };
 
-  /** Quita el módulo y todo lo que tiene adentro (ficha, mantenimientos, papeles). */
+  /** Quita el módulo y todo lo que tiene adentro (ficha, mantenimientos, papeles; en NO MORE, PIN y contadores). */
   const removeModule = async (id: string) => {
     const next = modules.filter((m) => m.id !== id);
     setModules(next);
@@ -103,7 +116,7 @@ export function useModules() {
       await supabase.from('modules').delete().eq('id', id);
     } else {
       await writeLocal(next);
-      await AsyncStorage.removeItem(`desj:vehicle:${id}`);
+      await AsyncStorage.multiRemove([`desj:vehicle:${id}`, `desj:nomore:${id}`, `desj:tobuy:${id}`]);
     }
   };
 

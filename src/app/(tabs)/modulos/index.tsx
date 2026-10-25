@@ -23,10 +23,12 @@ export default function Modulos() {
     }, [reload]),
   );
 
-  const open = (m: Module) => (m.kind === 'negocios' ? router.push('/modulos/negocios') : router.push({ pathname: '/modulos/[id]', params: { id: m.id } }));
+  const open = (m: Module) =>
+    m.kind === 'negocios' ? router.push('/modulos/negocios') : m.kind === 'nomore' ? router.push('/modulos/nomore') : m.kind === 'tobuy' ? router.push('/modulos/tobuy') : router.push({ pathname: '/modulos/[id]', params: { id: m.id } });
 
   const remove = async (m: Module) => {
-    const extra = m.kind === 'vehiculo' ? ' Se borran también su ficha, mantenimientos y papeles.' : '';
+    const extra =
+      m.kind === 'vehiculo' ? ' Se borran también su ficha, mantenimientos y papeles.' : m.kind === 'nomore' ? ' Se borran también tu PIN, tus contadores y su historial.' : m.kind === 'tobuy' ? ' Se borra también toda la lista y sus categorías.' : '';
     if (await confirm('Quitar módulo', `¿Quitar "${m.name}"?${extra} No se puede deshacer.`, 'Quitar')) void removeModule(m.id);
   };
 
@@ -47,7 +49,7 @@ export default function Modulos() {
       {ready && modules.length === 0 && !catalog ? (
         <Card>
           <Label>Sin módulos</Label>
-          <Text style={styles.caption}>Agrega los que te sirvan desde el catálogo: tus negocios, o cada vehículo que tengas.</Text>
+          <Text style={styles.caption}>Agrega los que te sirvan desde el catálogo: tus negocios, cada vehículo que tengas, tu lista de compras o lo que estás dejando.</Text>
         </Card>
       ) : null}
 
@@ -98,6 +100,8 @@ export default function Modulos() {
             setCatalog(false);
             // Recién agregado: se abre para llenarlo.
             if (kind === 'vehiculo') router.push({ pathname: '/modulos/[id]', params: { id } });
+            if (kind === 'nomore') router.push('/modulos/nomore');
+            if (kind === 'tobuy') router.push('/modulos/tobuy');
           }}
         />
       ) : (

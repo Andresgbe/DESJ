@@ -33,9 +33,11 @@ export default function VehicleScreen() {
     }, [reloadModules, reload]),
   );
 
-  // Negocios tiene su propia pantalla.
+  // Negocios, NO MORE y TO BUY tienen su propia pantalla.
   useEffect(() => {
     if (mod?.kind === 'negocios') router.replace('/modulos/negocios');
+    if (mod?.kind === 'nomore') router.replace('/modulos/nomore');
+    if (mod?.kind === 'tobuy') router.replace('/modulos/tobuy');
   }, [mod?.kind]);
 
   if (!mod) {

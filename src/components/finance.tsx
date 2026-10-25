@@ -18,6 +18,7 @@ import {
   Category,
   CategoryKind,
   CategoryShare,
+  currentMonth,
   dayLabel,
   Kind,
   money,
@@ -64,38 +65,35 @@ export function MonthChart({ txs, month }: { txs: Transaction[]; month: string }
           <Text style={styles.caption}>Gastos</Text>
         </View>
       </Row>
-      {empty ? (
-        <Text style={styles.caption}>Sin movimientos este mes.</Text>
-      ) : (
-        <View>
-          <Svg
-            width="100%"
-            height={200}
-            viewBox={`0 0 ${VB_W} ${VB_H}`}
-            preserveAspectRatio="none"
-            accessibilityLabel={`Ingresos y gastos por día: ${days.filter((d) => d.income || d.expense).map((d) => `día ${d.day}${d.income ? ` +$${money(d.income)}` : ''}${d.expense ? ` -$${money(d.expense)}` : ''}`).join(', ')}`}>
-            {[0.25, 0.5, 0.75, 1].map((f) => (
-              <Line key={f} x1={PAD.left} x2={VB_W - PAD.right} y1={y(max * f)} y2={y(max * f)} stroke={C.cardBorder} strokeWidth={1} />
+      {empty ? <Text style={styles.caption}>{month > currentMonth() ? 'Este mes todavía no empieza: todo en cero.' : 'Sin movimientos este mes: todo en cero.'}</Text> : null}
+      <View>
+        <Svg
+          width="100%"
+          height={200}
+          viewBox={`0 0 ${VB_W} ${VB_H}`}
+          preserveAspectRatio="none"
+          accessibilityLabel={`Ingresos y gastos por día: ${days.filter((d) => d.income || d.expense).map((d) => `día ${d.day}${d.income ? ` +$${money(d.income)}` : ''}${d.expense ? ` -$${money(d.expense)}` : ''}`).join(', ')}`}>
+          {[0.25, 0.5, 0.75, 1].map((f) => (
+            <Line key={f} x1={PAD.left} x2={VB_W - PAD.right} y1={y(max * f)} y2={y(max * f)} stroke={C.cardBorder} strokeWidth={1} />
+          ))}
+          {days.map((d) => (
+            <Rect key={`i${d.day}`} x={center(d.day) - bar} y={y(d.income)} width={d.income > 0 ? bar : 0} height={PAD.top + h - y(d.income)} rx={1.5} fill={C.ok} />
+          ))}
+          {days.map((d) => (
+            <Rect key={`e${d.day}`} x={center(d.day)} y={y(d.expense)} width={d.expense > 0 ? bar : 0} height={PAD.top + h - y(d.expense)} rx={1.5} fill={C.bad} />
+          ))}
+        </Svg>
+        {/* Etiquetas fuera del SVG: con preserveAspectRatio="none" el texto se estiraría. */}
+        <View style={styles.axis} pointerEvents="none">
+          {days
+            .filter((d) => d.day === 1 || d.day % 5 === 0)
+            .map((d) => (
+              <Text key={d.day} style={[styles.tick, { left: `${(center(d.day) / VB_W) * 100}%` }]}>
+                {d.day}
+              </Text>
             ))}
-            {days.map((d) => (
-              <Rect key={`i${d.day}`} x={center(d.day) - bar} y={y(d.income)} width={d.income > 0 ? bar : 0} height={PAD.top + h - y(d.income)} rx={1.5} fill={C.ok} />
-            ))}
-            {days.map((d) => (
-              <Rect key={`e${d.day}`} x={center(d.day)} y={y(d.expense)} width={d.expense > 0 ? bar : 0} height={PAD.top + h - y(d.expense)} rx={1.5} fill={C.bad} />
-            ))}
-          </Svg>
-          {/* Etiquetas fuera del SVG: con preserveAspectRatio="none" el texto se estiraría. */}
-          <View style={styles.axis} pointerEvents="none">
-            {days
-              .filter((d) => d.day === 1 || d.day % 5 === 0)
-              .map((d) => (
-                <Text key={d.day} style={[styles.tick, { left: `${(center(d.day) / VB_W) * 100}%` }]}>
-                  {d.day}
-                </Text>
-              ))}
-          </View>
         </View>
-      )}
+      </View>
     </Card>
   );
 }
@@ -328,24 +326,30 @@ export function CategoryManager({ categories, onAdd, onUpdate, onRemove }: { cat
 
 // ---------------------------------------------------------------------------- totales y desglose
 
+/** Ingresos y gastos en una fila y el balance en otra, con espacio para que los montos se lean completos. */
 export function Totals({ income, expense, balance }: { income: number; expense: number; balance: number }) {
-  const items = [
-    { label: 'Ingresos', value: `$${money(income)}`, color: C.ok },
-    { label: 'Gastos', value: `$${money(expense)}`, color: C.bad },
-    { label: 'Balance', value: `${balance >= 0 ? '+' : '-'}$${money(Math.abs(balance))}`, color: balance >= 0 ? C.ok : C.bad },
-  ];
   return (
-    <View style={styles.totals}>
-      {items.map((t) => (
-        <Card key={t.label} style={styles.total}>
-          <Label>{t.label}</Label>
-          <Mono style={[styles.big, { color: t.color }]} numberOfLines={1} adjustsFontSizeToFit>
-            {t.value}
-          </Mono>
-          <Text style={styles.caption}>USD BCV</Text>
-        </Card>
-      ))}
+    <View style={{ gap: 8 }}>
+      <View style={styles.totals}>
+        <TotalCard label="Ingresos" value={`$${money(income)}`} color={C.ok} />
+        <TotalCard label="Gastos" value={`$${money(expense)}`} color={C.bad} />
+      </View>
+      <TotalCard label="Balance del mes" value={`${balance >= 0 ? '+' : '-'}$${money(Math.abs(balance))}`} color={balance >= 0 ? C.ok : C.bad} />
     </View>
+  );
+}
+
+function TotalCard({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <Card style={styles.total}>
+      <Row>
+        <Label>{label}</Label>
+        <Text style={styles.caption}>USD BCV</Text>
+      </Row>
+      <Mono style={[styles.big, { color }]} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </Mono>
+    </Card>
   );
 }
 
@@ -358,12 +362,17 @@ export function Breakdown({ txs, categories }: { txs: Transaction[]; categories:
   );
 }
 
+const TOP = 5; // categorías y movimientos visibles antes de "Ver más"
+
 function ShareCard({ title, rows }: { title: string; rows: CategoryShare[] }) {
+  const [open, setOpen] = useState(true);
+  const [all, setAll] = useState(false);
+  const shown = all ? rows : rows.slice(0, TOP);
   return (
     <Card style={{ flexGrow: 1, flexBasis: 280 }}>
-      <Label>{title}</Label>
-      {rows.length === 0 ? <Text style={styles.caption}>Nada este mes.</Text> : null}
-      {rows.map((r) => (
+      <Collapse label={`${title} (${rows.length})`} open={open} onToggle={() => setOpen(!open)} />
+      {open && rows.length === 0 ? <Text style={styles.caption}>Nada este mes.</Text> : null}
+      {(open ? shown : []).map((r) => (
         <View key={r.id ?? 'none'} style={{ gap: 4 }}>
           <View style={styles.line}>
             <Text style={[styles.body, { flex: 1 }]} numberOfLines={1}>
@@ -377,7 +386,26 @@ function ShareCard({ title, rows }: { title: string; rows: CategoryShare[] }) {
           </View>
         </View>
       ))}
+      {open && rows.length > TOP ? <MoreBtn all={all} rest={rows.length - TOP} onPress={() => setAll(!all)} /> : null}
     </Card>
+  );
+}
+
+/** Encabezado que pliega o despliega una sección. */
+function Collapse({ label, open, onToggle }: { label: string; open: boolean; onToggle: () => void }) {
+  return (
+    <Pressable onPress={onToggle} style={styles.collapse} accessibilityRole="button" accessibilityState={{ expanded: open }}>
+      <Label style={{ color: C.accentSoft }}>{label}</Label>
+      <Text style={styles.caption}>{open ? 'Ocultar' : 'Mostrar'}</Text>
+    </Pressable>
+  );
+}
+
+function MoreBtn({ all, rest, onPress }: { all: boolean; rest: number; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={styles.more} accessibilityRole="button" accessibilityState={{ expanded: all }}>
+      <Text style={styles.moreText}>{all ? 'Ver menos' : `Ver ${rest} más`}</Text>
+    </Pressable>
   );
 }
 
@@ -385,8 +413,9 @@ function ShareCard({ title, rows }: { title: string; rows: CategoryShare[] }) {
 
 export function TxList({ txs, categories, month, onEdit, onRemove }: { txs: Transaction[]; categories: Category[]; month: string; onEdit: (t: Transaction) => void; onRemove: (t: Transaction) => void }) {
   const [open, setOpen] = useState(true);
+  const [all, setAll] = useState(false);
   const days: { day: string; items: Transaction[] }[] = [];
-  for (const t of txs) {
+  for (const t of all ? txs : txs.slice(0, TOP)) {
     const g = days.find((d) => d.day === t.occurred_on);
     if (g) g.items.push(t);
     else days.push({ day: t.occurred_on, items: [t] });
@@ -395,10 +424,7 @@ export function TxList({ txs, categories, month, onEdit, onRemove }: { txs: Tran
 
   return (
     <View style={{ gap: 8 }}>
-      <Pressable onPress={() => setOpen(!open)} style={styles.collapse} accessibilityRole="button" accessibilityState={{ expanded: open }}>
-        <Label style={{ color: C.accentSoft }}>{`Movimientos (${txs.length})`}</Label>
-        <Text style={styles.caption}>{open ? 'Ocultar' : 'Mostrar'}</Text>
-      </Pressable>
+      <Collapse label={`Movimientos (${txs.length})`} open={open} onToggle={() => setOpen(!open)} />
       {open && txs.length === 0 ? (
         <Card>
           <Text style={styles.body}>{`Sin movimientos en ${monthLabel(month).toLowerCase()}.`}</Text>
@@ -446,6 +472,7 @@ export function TxList({ txs, categories, month, onEdit, onRemove }: { txs: Tran
             );
           })
         : null}
+      {open && txs.length > TOP ? <MoreBtn all={all} rest={txs.length - TOP} onPress={() => setAll(!all)} /> : null}
     </View>
   );
 }
@@ -641,7 +668,7 @@ const styles = StyleSheet.create({
   name: { color: C.text, fontSize: 14.5, fontWeight: '600' },
   caption: { color: C.muted, fontSize: 12, lineHeight: 17 },
   num: { fontSize: 13.5, color: C.text, fontVariant: ['tabular-nums'] },
-  big: { fontSize: 22, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  big: { fontSize: 24, fontWeight: '600', fontVariant: ['tabular-nums'] },
   tag: { fontFamily: mono, fontSize: 10, letterSpacing: 1, color: C.muted, textTransform: 'uppercase' },
   small: { flexGrow: 0, minHeight: 40, paddingHorizontal: 14 },
   legend: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -658,7 +685,9 @@ const styles = StyleSheet.create({
   palette: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingLeft: 32 },
   paletteItem: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: R.control, borderWidth: 1, borderColor: 'transparent' },
   totals: { flexDirection: 'row', gap: 8 },
-  total: { flex: 1, gap: 4, paddingHorizontal: 10 },
+  total: { flex: 1, gap: 4 },
+  more: { minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: R.button, borderWidth: 1, borderColor: C.cardBorder },
+  moreText: { color: C.accentSoft, fontSize: 13.5, fontWeight: '600' },
   breakdown: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   track: { height: 6, borderRadius: 3, backgroundColor: C.surfaceSunken, overflow: 'hidden' },
   collapse: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 44 },

@@ -3,7 +3,7 @@
 import { Image } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Modal, Platform, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
 
 import { DateField } from '@/components/date-field';
 import { Btn, Choice, Field } from '@/components/form';
@@ -134,12 +134,13 @@ export function FileLine({ name, tag, onRemove }: { name: string; tag?: string; 
 }
 
 /**
- * Archivo guardado: tipo, nombre, miniatura si es foto, y Ver / Descargar / Quitar.
- * Ver abre la vista previa (el visor del teléfono o una pestaña del navegador para PDF); Descargar lo baja con su nombre.
+ * Archivo guardado, en mosaico pequeño: miniatura si es foto (o ícono si es PDF), tipo y nombre, y
+ * Descargar / Quitar. Tocar la miniatura o "Ampliar" la abre en grande (foto dentro de la app; PDF en el visor).
  */
-export function FileCard({ file, getUrl, onRemove }: { file: ExamFile; getUrl: (f: ExamFile, download?: boolean) => Promise<string | null>; onRemove: () => void }) {
+export function FileCard({ file, getUrl, onRemove, style }: { file: ExamFile; getUrl: (f: ExamFile, download?: boolean) => Promise<string | null>; onRemove: () => void; style?: ViewStyle }) {
   const isImage = file.mime.startsWith('image/');
   const [thumb, setThumb] = useState<string | null>(null);
+  const [big, setBig] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -155,29 +156,41 @@ export function FileCard({ file, getUrl, onRemove }: { file: ExamFile; getUrl: (
     if (Platform.OS === 'web') window.open(url, '_blank', 'noopener');
     else await WebBrowser.openBrowserAsync(url);
   };
+  const expand = () => (isImage && thumb ? setBig(true) : void open(false));
 
   return (
-    <View style={styles.fileCard}>
-      {isImage && thumb ? (
-        <Pressable onPress={() => open(false)} accessibilityRole="imagebutton" accessibilityLabel={`Ver ${file.name}`}>
-          <Image source={{ uri: thumb }} style={styles.thumb} contentFit="cover" />
-        </Pressable>
-      ) : null}
-      <View style={styles.fileName}>
-        <IconFile color={C.accentSoft} />
+    <View style={[styles.fileCard, style]}>
+      <Pressable onPress={expand} style={styles.thumb} accessibilityRole="imagebutton" accessibilityLabel={`Ampliar ${file.name}`}>
+        {isImage && thumb ? <Image source={{ uri: thumb }} style={StyleSheet.absoluteFill} contentFit="cover" /> : <IconFile color={C.accentSoft} size={28} />}
+        <View style={styles.expand}>
+          <Text style={styles.expandText}>Ampliar</Text>
+        </View>
+      </Pressable>
+      <View style={{ gap: 2 }}>
         <Text style={styles.tag}>{docLabel(file.docType)}</Text>
-        <Text style={styles.body} numberOfLines={1}>
+        <Text style={styles.fileTitle} numberOfLines={1}>
           {file.name}
         </Text>
       </View>
-      <Row style={{ justifyContent: 'flex-start', gap: 8 }}>
-        <Btn label="Ver" kind="outline" onPress={() => open(false)} style={styles.small} />
-        <Btn label="Descargar" kind="ghost" onPress={() => open(true)} style={styles.small} />
-        <View style={{ flex: 1 }} />
-        <Pressable onPress={onRemove} hitSlop={8} style={styles.fileRemove} accessibilityRole="button" accessibilityLabel={`Quitar ${file.name}`}>
+      <View style={styles.fileActions}>
+        <Pressable onPress={() => open(true)} style={styles.fileAction} accessibilityRole="button" accessibilityLabel={`Descargar ${file.name}`}>
+          <Text style={styles.actionText}>Descargar</Text>
+        </Pressable>
+        <Pressable onPress={onRemove} style={styles.fileAction} accessibilityRole="button" accessibilityLabel={`Quitar ${file.name}`}>
           <Text style={styles.removeText}>Quitar</Text>
         </Pressable>
-      </Row>
+      </View>
+
+      <Modal visible={big} transparent animationType="fade" onRequestClose={() => setBig(false)}>
+        <View style={styles.viewer}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setBig(false)} accessibilityLabel="Cerrar" />
+          {thumb ? <Image source={{ uri: thumb }} style={styles.viewerImage} contentFit="contain" /> : null}
+          <Row style={{ gap: 8, width: '100%', maxWidth: 480 }}>
+            <Btn label="Descargar" kind="outline" onPress={() => open(true)} />
+            <Btn label="Cerrar" onPress={() => setBig(false)} />
+          </Row>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -275,8 +288,16 @@ const styles = StyleSheet.create({
   caption: { color: C.muted, fontSize: 12.5 },
   picker: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tag: { fontFamily: mono, fontSize: 10, letterSpacing: 1.2, color: C.accentSoft, textTransform: 'uppercase' },
-  fileCard: { gap: 8, padding: 12, borderRadius: R.field, borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.surfaceSunken },
-  thumb: { width: '100%', height: 180, borderRadius: R.field, backgroundColor: C.surfaceInput },
+  fileCard: { gap: 6, padding: 8, borderRadius: R.field, borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.surfaceSunken },
+  thumb: { width: '100%', aspectRatio: 4 / 3, borderRadius: R.field, backgroundColor: C.surfaceInput, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  expand: { position: 'absolute', right: 6, bottom: 6, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: C.bg, opacity: 0.85 },
+  expandText: { fontFamily: mono, fontSize: 9.5, letterSpacing: 1, color: C.accentSoft, textTransform: 'uppercase' },
+  fileTitle: { color: C.text, fontSize: 13 },
+  fileActions: { flexDirection: 'row', justifyContent: 'space-between' },
+  fileAction: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
+  actionText: { color: C.accentSoft, fontSize: 13, fontWeight: '600' },
+  viewer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, padding: 16, backgroundColor: C.bg },
+  viewerImage: { width: '100%', maxWidth: 900, flex: 1 },
   small: { flexGrow: 0, minHeight: 44, paddingHorizontal: 18 },
   file: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingHorizontal: 12, borderRadius: R.field, borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.surfaceSunken },
   fileName: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },

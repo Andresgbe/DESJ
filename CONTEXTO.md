@@ -73,7 +73,7 @@ Encuesta: propósito = *ahorrar tiempo en tareas repetitivas*; tipo = *app o pla
 | Núcleo | Saludo, resumen del día, accesos rápidos | 0 ✅ |
 | Chat + voz | Hablar/escribir con DESJ; responde en texto y voz | 0 (demo) → 1 (Claude) |
 | Recordatorios / rutinas | Avisos a su hora; resumen diario 07:40 | 0 ✅ (locales) |
-| Calendario | Mes y día: calendario del iPhone (Apple + Google vía el teléfono), recordatorios de DESJ y pastillas | 1 ✅ (calendario del teléfono requiere development build) |
+| Calendario | Vistas Mes, Semana y Día (grilla por horas como Google Calendar): Google Calendar si está conectado (si no, el calendario del teléfono), recordatorios de DESJ y pastillas | 1 ✅ (calendario del teléfono requiere development build) |
 | Conocimiento | Archivos Markdown por usuario (perfil, salud, negocios, preferencias) que DESJ lee siempre; entrevista para llenarlos | 1 ✅ (guiada sin nube; con Claude al conectar) |
 | Pendientes | Lista de tareas por usuario (reemplaza la pestaña Rutinas) | 1 ✅ |
 | Historial de chats | Varias conversaciones por usuario; la memoria es común a todas | 1 ✅ |
@@ -121,7 +121,7 @@ src/
     _layout.tsx            ← raíz: sesión, datos, pila (Stack) con las pestañas y las pantallas del menú de perfil
     (tabs)/_layout.tsx     ← 5 pestañas: Núcleo, Calendario, YO, Módulos, Pendientes
     (tabs)/index.tsx       ← Núcleo: al entrar solo el cerebro grande + botón "Hablar con DESJ"; al tocarlo el cerebro se achica y aparece el chat, estado del día y el chat con DESJ (con historial)
-    (tabs)/calendario.tsx  ← mes + día: calendario del teléfono, recordatorios de DESJ y pastillas; agregar
+    (tabs)/calendario.tsx  ← Mes / Semana / Día (grilla de horas, tocar una hora abre Agregar): Google Calendar o el del teléfono, recordatorios de DESJ y pastillas
     (tabs)/yo/index.tsx    ← módulo YO: armadura holográfica que gira + altura, peso, IMC, edad, sangre, pastillas; entrada a los módulos personales
     (tabs)/yo/salud.tsx    ← YO · Salud: pestañas Pastillas (dosis múltiples, horas opcionales, recordatorios), Historial (año → mes → día) y Contactos
     (tabs)/yo/examen/[id].tsx ← detalle de un registro del historial: datos, archivos por tipo con vista previa y descarga, editar, borrar
@@ -306,3 +306,7 @@ npm run deploy:web         # exporta a dist/ y publica en producción (EAS Hosti
 - Documento de concepto: https://claude.ai/code/artifact/cfc073d2-84f4-4bbc-a24f-b3d96cb515ba
 - Mockups (app, web y propuestas de salud): https://claude.ai/artifact/USELQwhxi7JreX7RcAGWJX
 - Referencia: @adrian.alvarezl en Instagram (carrusel "JARVIS").
+
+**Calendario Semana/Día y archivos en mosaico (25 oct 2026):** la pestaña Calendario tiene vistas Mes, Semana y Día; en Semana y Día los eventos se ubican por hora (los que se pisan van en columnas), los de todo el día arriba, y una línea marca la hora actual. Tocar un espacio vacío abre Agregar con esa hora; tocar el día en la cabecera abre la vista Día. En Salud, los archivos de un registro se ven como mosaicos pequeños (2 por fila en el teléfono, 3 o 4 en pantallas anchas); la foto en grande solo se abre con "Ampliar" (visor dentro de la app; los PDF se abren en el visor del teléfono o del navegador).
+
+**Finanzas más legible (25 oct 2026):** la sección (Ingresos y gastos / Deudas / Presupuesto) se elige en una lista plegable. Ingresos y Gastos van en una fila y el Balance del mes en otra. El desglose por categoría y los movimientos son plegables y muestran 5; el resto con "Ver N más", que siempre empieza cerrado. La gráfica se dibuja aunque el mes esté vacío (todo en cero) y, al cambiar de mes, la vista se vacía enseguida y descarta las respuestas tardías (`loadMonth`).

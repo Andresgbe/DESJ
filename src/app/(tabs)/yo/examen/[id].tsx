@@ -2,7 +2,7 @@
 // (informes, órdenes, recetas…) con vista previa y descarga, agregar archivos, editar y borrar.
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { Btn } from '@/components/form';
 import { ExamForm, FileCard, FilePicker } from '@/components/health';
@@ -17,6 +17,9 @@ export default function ExamDetail() {
   const [editing, setEditing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const exam = exams.find((e) => e.id === id);
+  // Mosaicos pequeños: 2 por fila en el teléfono, 3 o 4 en pantallas anchas.
+  const width = useWindowDimensions().width;
+  const cols = width >= 900 ? 4 : width >= 560 ? 3 : 2;
 
   useFocusEffect(
     useCallback(() => {
@@ -73,9 +76,11 @@ export default function ExamDetail() {
         <View style={{ gap: 8 }}>
           <Label>Archivos</Label>
           {exam.files.length === 0 ? <Text style={styles.caption}>Sin archivos. Agrega el informe, la orden o la receta (foto o PDF).</Text> : null}
-          {[...exam.files].sort((a, b) => DOC_TYPES.findIndex((d) => d.id === a.docType) - DOC_TYPES.findIndex((d) => d.id === b.docType)).map((f) => (
-            <FileCard key={f.id} file={f} getUrl={fileUrl} onRemove={() => removeOne(f)} />
-          ))}
+          <View style={styles.files}>
+            {[...exam.files].sort((a, b) => DOC_TYPES.findIndex((d) => d.id === a.docType) - DOC_TYPES.findIndex((d) => d.id === b.docType)).map((f) => (
+              <FileCard key={f.id} file={f} getUrl={fileUrl} onRemove={() => removeOne(f)} style={{ width: `${(100 - (cols - 1) * 2) / cols}%` }} />
+            ))}
+          </View>
           <Label style={{ marginTop: 6 }}>Agregar archivo</Label>
           <FilePicker
             disabled={uploading}
@@ -129,4 +134,5 @@ const styles = StyleSheet.create({
   value: { color: C.text, fontSize: 15, lineHeight: 21 },
   missing: { color: C.muted, fontSize: 15 },
   caption: { color: C.muted, fontSize: 12.5, lineHeight: 18 },
+  files: { flexDirection: 'row', flexWrap: 'wrap', columnGap: '2%', rowGap: 8 },
 });

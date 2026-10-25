@@ -1,17 +1,17 @@
 // YO · Finanzas: ingresos, gastos, deudas y presupuesto mensual. Todo se lleva a una sola unidad, el dólar BCV,
-// para poder sumar bolívares, dólar efectivo, USDT y euros. Tres pestañas independientes:
-// Ingresos y gastos (la principal), Deudas y Presupuesto.
+// para poder sumar bolívares, dólar efectivo, USDT y euros. Tres secciones independientes que se eligen en una
+// lista plegable: Ingresos y gastos (la principal), Deudas y Presupuesto.
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Breakdown, CategoryManager, confirmRemoveTx, MissingRatesBanner, MonthChart, RatesCard, Totals, TransactionModal, TxList } from '@/components/finance';
 import { BillsTab, BudgetTab, MonthStepper } from '@/components/finance-lists';
-import { Btn, Choice } from '@/components/form';
-import { IconPlus } from '@/components/icons';
-import { Label, Screen, Title } from '@/components/ui';
+import { Btn } from '@/components/form';
+import { IconChevron, IconPlus } from '@/components/icons';
+import { Screen, Title } from '@/components/ui';
 import { currentMonth, ratesStale, totals, Transaction, useFinanceFlow } from '@/lib/finance';
-import { C } from '@/theme';
+import { C, R } from '@/theme';
 
 type Tab = 'flujo' | 'deudas' | 'presupuesto';
 const TABS: { id: Tab; label: string }[] = [
@@ -24,13 +24,40 @@ export default function Finanzas() {
   const [tab, setTab] = useState<Tab>('flujo');
   return (
     <Screen module="Módulo 03.2 · Finanzas" back>
-      <View style={{ gap: 2 }}>
-        <Label>Ingresos, gastos, deudas y presupuesto mensual</Label>
-        <Title accent="finanzas">Tus</Title>
-      </View>
-      <Choice options={TABS} value={tab} onChange={setTab} />
+      <Title accent="finanzas">Tus</Title>
+      <SectionPicker value={tab} onChange={setTab} />
       {tab === 'flujo' ? <FlowTab /> : tab === 'deudas' ? <BillsTab /> : <BudgetTab />}
     </Screen>
+  );
+}
+
+/** Lista plegable para elegir la sección: muestra solo la elegida y, al tocarla, las demás. */
+function SectionPicker({ value, onChange }: { value: Tab; onChange: (t: Tab) => void }) {
+  const [open, setOpen] = useState(false);
+  const current = TABS.find((t) => t.id === value)!;
+  return (
+    <View style={styles.picker}>
+      <Pressable onPress={() => setOpen(!open)} style={styles.pickerHead} accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={`Sección: ${current.label}`}>
+        <Text style={styles.pickerText}>{current.label}</Text>
+        <View style={{ transform: [{ rotate: open ? '-90deg' : '90deg' }] }}>
+          <IconChevron color={C.accentSoft} />
+        </View>
+      </Pressable>
+      {open
+        ? TABS.filter((t) => t.id !== value).map((t) => (
+            <Pressable
+              key={t.id}
+              onPress={() => {
+                onChange(t.id);
+                setOpen(false);
+              }}
+              style={({ pressed }) => [styles.pickerItem, pressed && { backgroundColor: C.surfaceSelected }]}
+              accessibilityRole="button">
+              <Text style={styles.pickerItemText}>{t.label}</Text>
+            </Pressable>
+          ))
+        : null}
+    </View>
   );
 }
 
@@ -131,4 +158,9 @@ const styles = StyleSheet.create({
   caption: { color: C.muted, fontSize: 12.5 },
   settings: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   half: { flexGrow: 1, flexBasis: 300 },
+  picker: { borderRadius: R.card, borderWidth: 1, borderColor: C.border, backgroundColor: C.surfaceInput, overflow: 'hidden' },
+  pickerHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 48, paddingHorizontal: 16 },
+  pickerText: { color: C.text, fontSize: 16, fontWeight: '600' },
+  pickerItem: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.cardBorder },
+  pickerItemText: { color: C.muted, fontSize: 15 },
 });

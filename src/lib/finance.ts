@@ -6,7 +6,7 @@
 // - Con sesión: viven en Supabase (privadas por usuario). DESJ las ve y registra movimientos desde el chat.
 // - Sin nube: viven en el teléfono.
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { useAuth } from '@/lib/auth';
 import { fetchRates, RATE_CODE_MAP } from '@/lib/dolar-api';
@@ -267,12 +267,18 @@ export function useFinanceFlow() {
   }, [cloud]);
 
   /** Movimientos de un mes, por rango de fechas (usa el índice), del más reciente al más antiguo. */
+  // Al cambiar de mes se vacía la vista enseguida y solo cuenta la última carga: así nunca se ve el mes anterior
+  // (ni la respuesta de un mes que llegó tarde) mientras se trae el nuevo.
+  const lastLoad = useRef(0);
   const loadMonth = useCallback(
     async (month: string) => {
+      const n = ++lastLoad.current;
+      setTransactions([]);
       const from = `${month}-01`;
       const to = `${month}-${String(daysInMonth(month)).padStart(2, '0')}`;
       if (!cloud) {
         const local = await readLocal();
+        if (n !== lastLoad.current) return;
         setTransactions(local.transactions.filter((t) => t.occurred_on >= from && t.occurred_on <= to).sort(byRecent));
       } else {
         const { data, error } = await supabase
@@ -282,6 +288,7 @@ export function useFinanceFlow() {
           .lte('occurred_on', to)
           .order('occurred_on', { ascending: false })
           .order('created_at', { ascending: false });
+        if (n !== lastLoad.current) return;
         if (error) throw new Error('No pude cargar los movimientos. Revisa tu conexión.');
         setTransactions(data.map(normTx));
       }

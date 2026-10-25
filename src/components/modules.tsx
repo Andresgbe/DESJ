@@ -3,13 +3,16 @@ import { useState } from 'react';
 import { ColorValue, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Btn } from '@/components/form';
-import { IconBusiness, IconCar } from '@/components/icons';
+import { IconBusiness, IconCar, IconCart, IconNoMore } from '@/components/icons';
 import { Card, Label, Row } from '@/components/ui';
 import { CATALOG, Module, ModuleKind } from '@/lib/modules';
 import { C, R } from '@/theme';
 
 export function ModuleIcon({ kind, color, size = 22 }: { kind: ModuleKind; color: ColorValue; size?: number }) {
-  return kind === 'vehiculo' ? <IconCar color={color} size={size} /> : <IconBusiness color={color} size={size} />;
+  if (kind === 'vehiculo') return <IconCar color={color} size={size} />;
+  if (kind === 'nomore') return <IconNoMore color={color} size={size} />;
+  if (kind === 'tobuy') return <IconCart color={color} size={size} />;
+  return <IconBusiness color={color} size={size} />;
 }
 
 /**

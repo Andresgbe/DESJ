@@ -14,7 +14,7 @@ import { ChatPanel } from '@/components/chat-panel';
 import { DesjCore, RESIZE, STATUS_HEIGHT } from '@/components/desj-core';
 import { IconCalendar } from '@/components/icons';
 import { Screen } from '@/components/ui';
-import { AgendaItem, calendarAvailable, getTodayAgenda } from '@/lib/calendar';
+import { AgendaItem, getTodayAgenda } from '@/lib/calendar';
 import { useChats } from '@/lib/chats';
 import { hhmm } from '@/lib/store';
 import { C, mono, S } from '@/theme';
@@ -124,7 +124,7 @@ export default function Nucleo() {
 
         {talking ? (
           <Animated.View entering={FadeInDown.duration(350).delay(200)} style={{ flex: 1, gap: GAP }}>
-            {!typing && calendarAvailable && agenda ? (
+            {!typing && agenda ? (
               <View style={styles.chips}>
                 <View style={styles.chip}>
                   <IconCalendar color={C.accentSoft} size={15} />

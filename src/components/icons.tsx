@@ -153,6 +153,31 @@ export const IconCar = ({ color, size = 22 }: P) => (
 
 
 
+// Módulo NO MORE: círculo tachado.
+export const IconNoMore = ({ color, size = 22 }: P) => (
+  <Svg {...base(size, color)}>
+    <Circle cx={12} cy={12} r={9} />
+    <Path d="M5.6 5.6l12.8 12.8" />
+  </Svg>
+);
+
+// Módulo TO BUY: carrito.
+export const IconCart = ({ color, size = 22 }: P) => (
+  <Svg {...base(size, color)}>
+    <Path d="M3 4h2l2.4 11h10.2L20 8H6.2" />
+    <Circle cx={9} cy={19} r={1.5} />
+    <Circle cx={17} cy={19} r={1.5} />
+  </Svg>
+);
+
+// Candado (PIN).
+export const IconLock = ({ color, size = 18 }: P) => (
+  <Svg {...base(size, color)}>
+    <Rect x={5} y={11} width={14} height={10} rx={2} />
+    <Path d="M8 11V8a4 4 0 0 1 8 0v3" />
+  </Svg>
+);
+
 export const IconArrowUp = ({ color, size = 18 }: P) => (
   <Svg {...base(size, color)}>
     <Path d="M12 19V5M6 11l6-6 6 6" />
