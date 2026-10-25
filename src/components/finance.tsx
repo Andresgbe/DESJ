@@ -4,6 +4,7 @@ import { ReactNode, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Line, Rect } from 'react-native-svg';
 
+import { DateField } from '@/components/date-field';
 import { Btn, Choice, Field } from '@/components/form';
 import { IconCheck, IconClose, IconPencil, IconTrash } from '@/components/icons';
 import { Card, Label, Mono, Row } from '@/components/ui';
@@ -601,7 +602,7 @@ export function TransactionModal({
             />
             <Field label="Lugar" value={place} onChangeText={setPlace} placeholder="El Gama, Farmatodo…" />
             <Field label="Descripción" value={description} onChangeText={setDescription} placeholder="Compra de la semana" />
-            <Field label="Fecha" value={date} onChangeText={setDate} placeholder="DD/MM/AAAA" keyboardType="numbers-and-punctuation" maxLength={10} />
+            <DateField label="Fecha" value={date} onChange={setDate} future />
             <Field label="Nota" value={note} onChangeText={setNote} multiline />
           </ScrollView>
           <Row style={{ padding: 16, paddingTop: 8 }}>

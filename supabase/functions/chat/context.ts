@@ -5,21 +5,47 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { KNOWLEDGE_FILES } from './tools.ts';
-
 export const HISTORY = 20; // mensajes previos que se reenvían
 const MAX_EXAMS = 80; // registros del historial médico más recientes (por la fecha en que pasaron)
 const MAX_RESULTS = 800; // caracteres de resultados por examen en el contexto
-const ENTRIES_PER_MODULE = 12; // registros más recientes de cada módulo
+const SERVICES_PER_VEHICLE = 8; // mantenimientos más recientes de cada vehículo
 const RECENT_MOVES = 25; // movimientos de finanzas del mes que ve DESJ
 
+export type Section = 'salud' | 'finanzas' | 'modulos';
+export const SECTIONS: Section[] = ['salud', 'finanzas', 'modulos'];
+
+// Palabras que delatan el tema de un mensaje (sin tildes, en minúsculas). Conocimiento se lee siempre; cada
+// área solo cuando el mensaje (o lo último de la conversación) habla de ella: así el contexto es más corto y
+// DESJ responde más rápido. Si se equivoca, Claude puede pedir el área con la herramienta abrir_seccion.
+const TOPICS: Record<Section, RegExp> = {
+  salud:
+    /salud|medic|doctor|\bdra?\b|pastill|dosis|tom(e|o|ar|aste)\b|examen|consulta|informe|orden|receta|laborator|clinic|sintom|dolor|presion|tension|glucosa|colesterol|vacuna|alergi|hospital|\bcita|cardio|resultado|analisis|hemat|sangre|enferm|fiebre|gripe|tratamiento|operaci|cirug/,
+  finanzas:
+    /gast|pag(o|ue|ar|aste|ado)|compr|cobr|ingres|dolar|\$|\bbs\b|bolivar|tasa|usdt|efectivo|presupuest|deuda|plata|dinero|precio|factur|finanz|sueldo|cuanto llevo|zelle|transfer|balance|ahorr|mercado|supermerc|alquiler/,
+  modulos: /carro|vehicul|moto\b|camioneta|aceite|kilometr|\bkm\b|mantenimiento|seguro|caucho|freno|bateria|placa|revision|negocio|ganad|lote|vaca|becerr|empresa/,
+};
+
+const plain = (t: string) => t.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+/** Áreas que pide el mensaje: por palabras clave, por el nombre de un módulo ("la Hilux") o todas si trae archivos. */
+export function detectSections(text: string, moduleNames: string[], hasFiles: boolean): Section[] {
+  if (hasFiles) return SECTIONS;
+  const t = plain(text);
+  const found = SECTIONS.filter((s) => TOPICS[s].test(t));
+  const names = moduleNames.flatMap((n) => plain(n).split(/\s+/)).filter((w) => w.length > 3);
+  if (!found.includes('modulos') && names.some((w) => t.includes(w))) found.push('modulos');
+  return found;
+}
+
+type Opts = { message?: string; hasFiles?: boolean; mode?: 'chat' | 'conocimiento' };
+
 // `agenda` la manda el teléfono (eventos de hoy de su calendario); null = sin acceso al calendario.
-export async function loadContext(db: SupabaseClient, userId: string, agenda: unknown, conversationId: string | null) {
-  const [profile, knowledge, memories, meds, reminders, tasks, exams, examFiles, contacts, modules, entries, history] = await Promise.all([
+export async function loadContext(db: SupabaseClient, userId: string, agenda: unknown, conversationId: string | null, opts: Opts = {}) {
+  // 1) Lo de siempre: perfil, Conocimiento completo, memorias, pendientes, recordatorios, historial y los módulos.
+  const [profile, knowledge, memories, reminders, tasks, modules, history] = await Promise.all([
     db.from('profiles').select('display_name, about, timezone').eq('id', userId).single(),
-    db.from('knowledge').select('slug, content, updated_at').eq('user_id', userId),
+    db.from('knowledge').select('slug, title, content').eq('user_id', userId),
     db.from('memories').select('id, category, content, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(150),
-    db.from('meds').select('id, name, dose, doses_per_day, times').eq('user_id', userId).eq('active', true).order('created_at'),
     db
       .from('reminders')
       .select('title, due_at, repeat')
@@ -29,21 +55,7 @@ export async function loadContext(db: SupabaseClient, userId: string, agenda: un
       .order('due_at')
       .limit(20),
     db.from('tasks').select('id, title, due_date').eq('user_id', userId).eq('done', false).order('due_date', { ascending: true, nullsFirst: false }).limit(50),
-    db
-      .from('health_exams')
-      .select('id, title, exam_date, kind, place, doctor, results, notes')
-      .eq('user_id', userId)
-      .order('exam_date', { ascending: false })
-      .limit(MAX_EXAMS),
-    db.from('health_exam_files').select('exam_id, doc_type').eq('user_id', userId).limit(2000),
-    db.from('health_contacts').select('id, kind, name, specialty, phone, email, address, notes').eq('user_id', userId).order('name').limit(100),
-    db.from('modules').select('id, kind, name, description').eq('user_id', userId).order('position').limit(50),
-    db
-      .from('module_entries')
-      .select('module_id, title, entry_date, details, created_at')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(500),
+    db.from('modules').select('id, kind, name').eq('user_id', userId).order('position').limit(50),
     conversationId
       ? db.from('messages').select('role, content').eq('user_id', userId).eq('conversation_id', conversationId).eq('status', 'done').order('created_at', { ascending: false }).limit(HISTORY)
       : Promise.resolve({ data: [] as { role: string; content: string }[] }),
@@ -57,11 +69,17 @@ export async function loadContext(db: SupabaseClient, userId: string, agenda: un
     .formatToParts(now)
     .find((p) => p.type === 'timeZoneName')?.value.replace('GMT', '') || '+00:00';
 
-  const [{ data: intakes }, finance] = await Promise.all([
-    db.from('med_intakes').select('med_id, dose').eq('user_id', userId).eq('day', today),
-    loadFinance(db, userId, today),
-  ]);
+  // 2) Las áreas que pide el mensaje. Se mira también lo último que dijo la persona en esta conversación,
+  //    para que "¿y el mes pasado?" siga en finanzas.
+  const recent = (history.data ?? [])
+    .filter((r) => r.role === 'user')
+    .slice(0, 2)
+    .map((r) => r.content)
+    .join(' ');
+  const sections = opts.mode === 'conocimiento' ? [] : detectSections(`${opts.message ?? ''} ${recent}`, (modules.data ?? []).map((m) => m.name), Boolean(opts.hasFiles));
+  const loaded = await Promise.all(sections.map((s) => loadSection(db, userId, s, today)));
 
+  const docs = [...(knowledge.data ?? [])].sort((a, b) => order(a.slug) - order(b.slug) || a.slug.localeCompare(b.slug));
   const lines = [
     '<contexto_usuario>',
     `Nombre: ${profile.data?.display_name || '[sin nombre]'}`,
@@ -69,21 +87,18 @@ export async function loadContext(db: SupabaseClient, userId: string, agenda: un
     `Ahora: ${nowText} (zona ${tz}, desfase ${offset}). Hoy es ${today}.`,
     '',
     '<conocimiento>',
-    ...KNOWLEDGE_FILES.map((slug) => {
-      const doc = (knowledge.data ?? []).find((k) => k.slug === slug);
-      return `### ${slug}.md
-${doc?.content.trim() || '[vacío: todavía no hay datos]'}
-`;
-    }),
+    ...(docs.length
+      ? docs.map(
+          (d) => `### ${d.slug}.md${d.title ? ` (${d.title})` : ''}
+${d.content.trim() || '[vacío: todavía no hay datos]'}
+`,
+        )
+      : ['[sin archivos todavía]']),
     '</conocimiento>',
     '',
     '<memorias>',
     ...(memories.data ?? []).reverse().map((m) => `- [${m.id}] (${m.category}, ${m.created_at.slice(0, 10)}) ${m.content}`),
     '</memorias>',
-    '',
-    '<medicamentos>',
-    ...(meds.data ?? []).map((m) => medLine(m, (intakes ?? []).filter((i) => i.med_id === m.id).map((i) => i.dose))),
-    '</medicamentos>',
     '',
     '<recordatorios_pendientes>',
     ...(reminders.data ?? []).map((r) => `- ${r.due_at} ${r.repeat === 'daily' ? '(diario) ' : ''}${r.title}`),
@@ -93,24 +108,10 @@ ${doc?.content.trim() || '[vacío: todavía no hay datos]'}
     ...(tasks.data ?? []).map((t) => `- [${t.id}] ${t.due_date ? `(${t.due_date}) ` : ''}${t.title}`),
     '</pendientes>',
     '',
-    '<historial_medico>',
-    ...examLines(exams.data ?? [], examFiles.data ?? []),
-    '</historial_medico>',
+    `<modulos_agregados>${(modules.data ?? []).map((m) => `${m.name} (${m.kind})`).join(', ') || 'ninguno'}</modulos_agregados>`,
+    `<secciones_cargadas>${sections.join(', ') || 'ninguna'} (las demás: pídelas con abrir_seccion si las necesitas)</secciones_cargadas>`,
     '',
-    '<contactos_salud>',
-    ...(contacts.data ?? []).map((c) =>
-      `- [${c.id}] ${[c.kind, c.name, c.specialty, c.phone && `tel ${c.phone}`, c.email, c.address, c.notes].filter(Boolean).join(' · ')}`,
-    ),
-    '</contactos_salud>',
-    '',
-    '<modulos>',
-    ...moduleLines(modules.data ?? [], entries.data ?? []),
-    '</modulos>',
-    '',
-    '<finanzas>',
-    ...finance,
-    '</finanzas>',
-    '',
+    ...loaded.flat(),
     '<agenda_hoy>',
     ...agendaLines(agenda, tz),
     '</agenda_hoy>',
@@ -122,7 +123,48 @@ ${doc?.content.trim() || '[vacío: todavía no hay datos]'}
   while (rows.length && rows[0].role !== 'user') rows.shift();
   const historyMsgs: Anthropic.MessageParam[] = rows.map((r) => ({ role: r.role as 'user' | 'assistant', content: r.content }));
 
-  return { block: lines.join('\n'), today, history: historyMsgs };
+  return { block: lines.join('\n'), today, history: historyMsgs, sections };
+}
+
+const CORE_ORDER = ['perfil', 'salud', 'negocios', 'preferencias'];
+const order = (slug: string) => (CORE_ORDER.includes(slug) ? CORE_ORDER.indexOf(slug) : CORE_ORDER.length);
+
+/** Un área completa, con sus etiquetas. La usan loadContext y la herramienta abrir_seccion. */
+export async function loadSection(db: SupabaseClient, userId: string, section: Section, today: string): Promise<string[]> {
+  if (section === 'salud') {
+    const [meds, intakes, exams, examFiles, contacts] = await Promise.all([
+      db.from('meds').select('id, name, dose, doses_per_day, times').eq('user_id', userId).eq('active', true).order('created_at'),
+      db.from('med_intakes').select('med_id, dose').eq('user_id', userId).eq('day', today),
+      db
+        .from('health_exams')
+        .select('id, title, exam_date, kind, place, doctor, results, notes')
+        .eq('user_id', userId)
+        .order('exam_date', { ascending: false })
+        .limit(MAX_EXAMS),
+      db.from('health_exam_files').select('exam_id, doc_type').eq('user_id', userId).limit(2000),
+      db.from('health_contacts').select('id, kind, name, specialty, phone, email, address, notes').eq('user_id', userId).order('name').limit(100),
+    ]);
+    return [
+      '<medicamentos>',
+      ...((meds.data ?? []).length ? (meds.data ?? []).map((m) => medLine(m, (intakes.data ?? []).filter((i) => i.med_id === m.id).map((i) => i.dose))) : ['[ninguno]']),
+      '</medicamentos>',
+      '',
+      '<historial_medico>',
+      ...examLines(exams.data ?? [], examFiles.data ?? []),
+      '</historial_medico>',
+      '',
+      '<contactos_salud>',
+      ...(contacts.data ?? []).map((c) => `- [${c.id}] ${[c.kind, c.name, c.specialty, c.phone && `tel ${c.phone}`, c.email, c.address, c.notes].filter(Boolean).join(' · ')}`),
+      '</contactos_salud>',
+      '',
+    ];
+  }
+  if (section === 'finanzas') return ['<finanzas>', ...(await loadFinance(db, userId, today)), '</finanzas>', ''];
+  const [modules, vehicles] = await Promise.all([
+    db.from('modules').select('id, kind, name').eq('user_id', userId).order('position').limit(50),
+    loadVehicles(db, userId),
+  ]);
+  return ['<modulos>', ...moduleLines(modules.data ?? [], vehicles), '</modulos>', ''];
 }
 
 /** Resumen de Finanzas del mes en curso, en dólares BCV: totales, por categoría, tasas y últimos movimientos. */
@@ -200,20 +242,43 @@ function examLines(exams: ExamRow[], files: { exam_id: string; doc_type: string 
   });
 }
 
-type ModuleRow = { id: string; kind: string; name: string; description: string };
-type EntryRow = { module_id: string; title: string; entry_date: string | null; details: string; created_at: string };
+type ModuleRow = { id: string; kind: string; name: string };
+type Vehicles = Awaited<ReturnType<typeof loadVehicles>>;
 
-/** Módulos de la pestaña MÓDULOS con sus registros más recientes (por fecha del registro). */
-function moduleLines(modules: ModuleRow[], entries: EntryRow[]): string[] {
+async function loadVehicles(db: SupabaseClient, userId: string) {
+  const [v, s, d] = await Promise.all([
+    db.from('vehicles').select('module_id, brand, model, year, plate, color, odometer_km, odometer_on').eq('user_id', userId),
+    db
+      .from('vehicle_services')
+      .select('module_id, service_date, km, kind, title, cost, shop, next_km, next_date')
+      .eq('user_id', userId)
+      .order('service_date', { ascending: false })
+      .limit(200),
+    db.from('vehicle_documents').select('module_id, kind, name, number, expires_on, storage_path').eq('user_id', userId),
+  ]);
+  return { cards: v.data ?? [], services: s.data ?? [], docs: d.data ?? [] };
+}
+
+/** Módulos de la pestaña MÓDULOS; cada vehículo con su ficha, mantenimientos recientes y papeles. */
+function moduleLines(modules: ModuleRow[], vehicles: Vehicles): string[] {
   if (!modules.length) return ['[sin módulos]'];
   return modules.flatMap((m) => {
-    const own = entries
-      .filter((e) => e.module_id === m.id)
-      .sort((a, b) => (b.entry_date ?? b.created_at.slice(0, 10)).localeCompare(a.entry_date ?? a.created_at.slice(0, 10)))
-      .slice(0, ENTRIES_PER_MODULE);
+    if (m.kind !== 'vehiculo') return [`- [${m.id}] ${m.kind} · ${m.name}`];
+    const card = vehicles.cards.find((c) => c.module_id === m.id);
+    const ficha = card
+      ? [[card.brand, card.model, card.year].filter(Boolean).join(' '), card.plate && `placa ${card.plate}`, card.color, card.odometer_km != null && `${card.odometer_km} km (al ${card.odometer_on ?? '?'})`]
+          .filter(Boolean)
+          .join(' · ')
+      : '[ficha sin llenar]';
+    const services = vehicles.services.filter((s) => s.module_id === m.id).slice(0, SERVICES_PER_VEHICLE);
+    const docs = vehicles.docs.filter((d) => d.module_id === m.id);
     return [
-      `- [${m.id}] ${m.kind} · ${m.name}${m.description ? ` · ${m.description}` : ''}`,
-      ...own.map((e) => `  · ${e.entry_date ?? 'sin fecha'} ${e.title}${e.details ? `: ${e.details.replace(/\s+/g, ' ').slice(0, 200)}` : ''}`),
+      `- [${m.id}] vehiculo · ${m.name} · ${ficha}`,
+      ...services.map(
+        (s) =>
+          `  · mantenimiento ${s.service_date} ${s.kind}${s.title ? ` (${s.title})` : ''}${s.km != null ? ` a ${s.km} km` : ''}${s.cost != null ? ` · $${Number(s.cost)}` : ''}${s.shop ? ` · ${s.shop}` : ''}${s.next_km != null || s.next_date ? ` · próximo ${[s.next_km != null && `${s.next_km} km`, s.next_date].filter(Boolean).join(' o ')}` : ''}`,
+      ),
+      ...docs.map((d) => `  · papel ${d.kind}: ${d.name}${d.number ? ` N.º ${d.number}` : ''} · vence ${d.expires_on ?? 'sin fecha'}${d.storage_path ? ' · con archivo' : ''}`),
     ];
   });
 }

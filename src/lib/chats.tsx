@@ -33,6 +33,8 @@ type Ctx = {
   newChat: () => void;
   open: (id: string) => Promise<void>;
   remove: (id: string) => Promise<void>;
+  /** Cambia el título de una conversación. Devuelve false si no se pudo. */
+  rename: (id: string, title: string) => Promise<boolean>;
 };
 
 const ChatsCtx = createContext<Ctx | null>(null);
@@ -197,8 +199,21 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const rename = async (id: string, title: string) => {
+    const clean = title.replace(/\s+/g, ' ').trim().slice(0, 120);
+    if (!clean) return false;
+    if (cloud) {
+      const { error } = await supabase.from('conversations').update({ title: clean }).eq('id', id);
+      if (error) return false;
+      setConversations((list) => list.map((c) => (c.id === id ? { ...c, title: clean } : c)));
+    } else {
+      saveLocal(local.map((c) => (c.id === id ? { ...c, title: clean } : c)));
+    }
+    return true;
+  };
+
   return (
-    <ChatsCtx.Provider value={{ ready, conversations, activeId, messages, busy, send, newChat, open, remove }}>
+    <ChatsCtx.Provider value={{ ready, conversations, activeId, messages, busy, send, newChat, open, remove, rename }}>
       {children}
     </ChatsCtx.Provider>
   );

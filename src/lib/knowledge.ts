@@ -1,4 +1,5 @@
-// Conocimiento: los archivos Markdown que DESJ lee antes de cada respuesta (perfil, salud, negocios, preferencias).
+// Conocimiento: los archivos Markdown que DESJ lee antes de cada respuesta. Hay cuatro de base (perfil, salud,
+// negocios, preferencias: Mis datos y YO leen perfil y salud) y la persona puede crear, renombrar y borrar los suyos.
 // - Con sesión: viven en Supabase (tabla knowledge) y Claude los reescribe en la entrevista.
 // - Sin nube: viven en el teléfono y una entrevista guiada los va llenando campo por campo.
 //   Al conectar la nube, lo que haya en el teléfono se sube solo la primera vez.
@@ -8,10 +9,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 
-export type Slug = 'perfil' | 'salud' | 'negocios' | 'preferencias';
-export type Doc = { content: string; updatedAt: string | null };
+/** Nombre del archivo (sin .md): minúsculas, números y guiones. */
+export type Slug = string;
+export type Doc = { title: string; content: string; updatedAt: string | null };
 export type Docs = Record<Slug, Doc>;
 
+/** Los cuatro archivos de base, en este orden. Si se borra uno, vuelve vacío: la app los usa. */
 export const FILES: { slug: Slug; title: string; hint: string }[] = [
   { slug: 'perfil', title: 'Perfil', hint: 'Quién eres: nombre, edad, ciudad, ocupación, familia' },
   { slug: 'salud', title: 'Salud', hint: 'Peso, talla, condiciones, alergias, médico, objetivos' },
@@ -47,24 +50,40 @@ const SKIP = /^(saltar|salta|paso|omitir|siguiente|no s[eé]|prefiero no)\.?$/i;
 const LOCAL_KEY = 'desj:knowledge:v1';
 type LocalState = { docs: Partial<Docs>; skipped: string[] };
 
-const EMPTY: Docs = {
-  perfil: { content: '', updatedAt: null },
-  salud: { content: '', updatedAt: null },
-  negocios: { content: '', updatedAt: null },
-  preferencias: { content: '', updatedAt: null },
-};
+const EMPTY: Docs = Object.fromEntries(FILES.map((f) => [f.slug, { title: f.title, content: '', updatedAt: null }]));
+const isCore = (slug: Slug) => FILES.some((f) => f.slug === slug);
+const titleOf = (docs: Docs, slug: Slug) => docs[slug]?.title || FILES.find((f) => f.slug === slug)?.title || slug;
+
+/** "Mi Familia" → "mi-familia". */
+export function slugify(title: string) {
+  return title
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40) || 'archivo';
+}
+
+/** Archivos para mostrar: los de base primero (en su orden) y después los creados, por nombre. */
+export function listFiles(docs: Docs) {
+  const extra = Object.keys(docs)
+    .filter((slug) => !isCore(slug))
+    .sort((a, b) => titleOf(docs, a).localeCompare(titleOf(docs, b)));
+  return [...FILES.map((f) => ({ slug: f.slug, title: titleOf(docs, f.slug), hint: f.hint, core: true })), ...extra.map((slug) => ({ slug, title: titleOf(docs, slug), hint: '', core: false }))];
+}
 
 const fieldLine = (label: string) => new RegExp(`^- \\*\\*${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:\\*\\*.*$`, 'm');
 
 /** Pone o reemplaza la línea "- **Campo:** valor" sin tocar el resto del archivo (respeta ediciones a mano). */
 export function upsertField(content: string, slug: Slug, label: string, value: string) {
-  const title = FILES.find((f) => f.slug === slug)!.title;
+  const title = FILES.find((f) => f.slug === slug)?.title ?? slug;
   const line = `- **${label}:** ${value.replace(/\s+/g, ' ').trim()}`;
   const base = content.trim() || `# ${title}`;
   return fieldLine(label).test(base) ? base.replace(fieldLine(label), line) : `${base}\n${base.includes('\n- ') ? '' : '\n'}${line}`;
 }
 
-const hasField = (docs: Docs, slug: Slug, label: string) => fieldLine(label).test(docs[slug].content);
+const hasField = (docs: Docs, slug: Slug, label: string) => fieldLine(label).test(docs[slug]?.content ?? '');
 
 /** Siguiente pregunta de la entrevista guiada: la primera sin responder ni saltar. */
 export function nextQuestion(docs: Docs, skipped: string[]) {
@@ -94,21 +113,24 @@ export function useKnowledge() {
   const reload = useCallback(async () => {
     const local = await readLocal();
     if (!cloud) {
-      setDocs({ ...EMPTY, ...local.docs });
+      // Copias viejas no traen `title`: se completa con el nombre de base.
+      const merged: Docs = { ...EMPTY };
+      for (const [slug, d] of Object.entries(local.docs)) if (d) merged[slug] = { ...d, title: d.title || titleOf(EMPTY, slug) };
+      setDocs(merged);
       setSkipped(local.skipped);
       setReady(true);
       return;
     }
-    const { data } = await supabase.from('knowledge').select('slug, content, updated_at');
+    const { data } = await supabase.from('knowledge').select('slug, title, content, updated_at');
     const next: Docs = { ...EMPTY };
-    for (const row of data ?? []) next[row.slug as Slug] = { content: row.content, updatedAt: row.updated_at };
+    for (const row of data ?? []) next[row.slug] = { title: row.title || titleOf(EMPTY, row.slug), content: row.content, updatedAt: row.updated_at };
 
     // Primera vez en la nube: se sube lo que se llenó en el teléfono.
     const pending = FILES.filter((f) => !next[f.slug].content && local.docs[f.slug]?.content);
     if (pending.length) {
-      const rows = pending.map((f) => ({ slug: f.slug, content: local.docs[f.slug]!.content, updated_at: new Date().toISOString() }));
+      const rows = pending.map((f) => ({ slug: f.slug, title: f.title, content: local.docs[f.slug]!.content, updated_at: new Date().toISOString() }));
       const { error } = await supabase.from('knowledge').upsert(rows, { onConflict: 'user_id,slug' });
-      if (!error) for (const r of rows) next[r.slug] = { content: r.content, updatedAt: r.updated_at };
+      if (!error) for (const r of rows) next[r.slug] = { title: r.title, content: r.content, updatedAt: r.updated_at };
     }
     setDocs(next);
     setReady(true);
@@ -125,9 +147,9 @@ export function useKnowledge() {
 
   /** Guarda un archivo completo (edición a mano). */
   const saveDoc = async (slug: Slug, content: string) => {
-    const doc = { content: content.trim(), updatedAt: new Date().toISOString() };
+    const doc = { title: titleOf(docs, slug), content: content.trim(), updatedAt: new Date().toISOString() };
     if (cloud) {
-      const { error } = await supabase.from('knowledge').upsert({ slug, content: doc.content, updated_at: doc.updatedAt }, { onConflict: 'user_id,slug' });
+      const { error } = await supabase.from('knowledge').upsert({ slug, title: doc.title, content: doc.content, updated_at: doc.updatedAt }, { onConflict: 'user_id,slug' });
       if (error) return false;
     }
     const next = { ...docs, [slug]: doc };
@@ -142,12 +164,12 @@ export function useKnowledge() {
     const slugs = Object.keys(patch) as Slug[];
     if (!slugs.length) return true;
     if (cloud) {
-      const rows = slugs.map((slug) => ({ slug, content: patch[slug]!.trim(), updated_at: updatedAt }));
+      const rows = slugs.map((slug) => ({ slug, title: titleOf(docs, slug), content: patch[slug]!.trim(), updated_at: updatedAt }));
       const { error } = await supabase.from('knowledge').upsert(rows, { onConflict: 'user_id,slug' });
       if (error) return false;
     }
     const next = { ...docs };
-    for (const slug of slugs) next[slug] = { content: patch[slug]!.trim(), updatedAt };
+    for (const slug of slugs) next[slug] = { title: titleOf(docs, slug), content: patch[slug]!.trim(), updatedAt };
     setDocs(next);
     if (!cloud) await persistLocal(next, skipped);
     return true;
@@ -162,12 +184,58 @@ export function useKnowledge() {
     if (isSkip(text)) {
       nextSkipped = [...skipped, q.id];
     } else {
-      nextDocs = { ...docs, [q.slug]: { content: upsertField(docs[q.slug].content, q.slug, q.label, text), updatedAt: new Date().toISOString() } };
+      nextDocs = { ...docs, [q.slug]: { title: titleOf(docs, q.slug), content: upsertField(docs[q.slug]?.content ?? '', q.slug, q.label, text), updatedAt: new Date().toISOString() } };
     }
     setDocs(nextDocs);
     setSkipped(nextSkipped);
     await persistLocal(nextDocs, nextSkipped);
     return nextQuestion(nextDocs, nextSkipped);
+  };
+
+  /** Crea un archivo nuevo con ese nombre. Devuelve su slug, o null si no se pudo. */
+  const createDoc = async (title: string): Promise<Slug | null> => {
+    const clean = title.trim().slice(0, 60);
+    if (!clean) return null;
+    let slug = slugify(clean);
+    for (let i = 2; docs[slug]; i++) slug = `${slugify(clean).slice(0, 36)}-${i}`;
+    const doc = { title: clean, content: `# ${clean}\n`, updatedAt: new Date().toISOString() };
+    if (cloud) {
+      const { error } = await supabase.from('knowledge').insert({ slug, title: doc.title, content: doc.content, updated_at: doc.updatedAt });
+      if (error) return null;
+    }
+    const next = { ...docs, [slug]: doc };
+    setDocs(next);
+    if (!cloud) await persistLocal(next, skipped);
+    return slug;
+  };
+
+  /** Cambia el nombre visible (el archivo sigue siendo el mismo). */
+  const renameDoc = async (slug: Slug, title: string) => {
+    const clean = title.trim().slice(0, 60);
+    if (!clean) return false;
+    const doc = { ...(docs[slug] ?? { content: '', updatedAt: null }), title: clean };
+    if (cloud) {
+      const { error } = await supabase.from('knowledge').upsert({ slug, title: clean, content: doc.content }, { onConflict: 'user_id,slug' });
+      if (error) return false;
+    }
+    const next = { ...docs, [slug]: doc };
+    setDocs(next);
+    if (!cloud) await persistLocal(next, skipped);
+    return true;
+  };
+
+  /** Borra el archivo. Los de base vuelven vacíos con su nombre original. */
+  const removeDoc = async (slug: Slug) => {
+    if (cloud) {
+      const { error } = await supabase.from('knowledge').delete().eq('slug', slug);
+      if (error) return false;
+    }
+    const next = { ...docs };
+    delete next[slug];
+    if (isCore(slug)) next[slug] = EMPTY[slug];
+    setDocs(next);
+    if (!cloud) await persistLocal(next, skipped);
+    return true;
   };
 
   /** Vuelve a ofrecer las preguntas que se saltaron. */
@@ -178,12 +246,12 @@ export function useKnowledge() {
 
   const answered = QUESTIONS.filter((q) => hasField(docs, q.slug, q.label)).length;
 
-  return { cloud, ready, docs, skipped, reload, saveDoc, saveDocs, answerLocal, resetSkipped, progress: { answered, total: QUESTIONS.length } };
+  return { cloud, ready, docs, skipped, reload, saveDoc, saveDocs, createDoc, renameDoc, removeDoc, answerLocal, resetSkipped, progress: { answered, total: QUESTIONS.length } };
 }
 
 /** Primer nombre según perfil.md ("- **Nombre completo:** Steven …"), o '' si todavía no está. */
 export function firstName(docs: Docs) {
-  const m = docs.perfil.content.match(/\*\*Nombre(?: completo)?:\*\*\s*([^\s,]+)/i);
+  const m = (docs.perfil?.content ?? '').match(/\*\*Nombre(?: completo)?:\*\*\s*([^\s,]+)/i);
   return m ? m[1] : '';
 }
 
@@ -195,7 +263,7 @@ export function readField(docs: Docs, labels: string[]) {
   for (const slug of ['salud', 'perfil'] as Slug[]) {
     for (const label of labels) {
       const safe = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const m = docs[slug].content.match(new RegExp(`\\*\\*${safe}:\\*\\*\\s*(.+)$`, 'im'));
+      const m = (docs[slug]?.content ?? '').match(new RegExp(`\\*\\*${safe}:\\*\\*\\s*(.+)$`, 'im'));
       const value = m?.[1].trim();
       if (value && !/pendiente/i.test(value)) return value;
     }
@@ -216,14 +284,15 @@ export function writeField(docs: Docs, slug: Slug, labels: string[], value: stri
   for (const s of ['salud', 'perfil'] as Slug[]) {
     for (const label of labels) {
       const re = labelLine(label);
-      if (!re.test(docs[s].content)) continue;
-      const next = clean ? docs[s].content.replace(re, (line) => `- **${label}:** ${clean}${line.endsWith('\n') ? '\n' : ''}`) : docs[s].content.replace(re, '');
+      const text = docs[s]?.content ?? '';
+      if (!re.test(text)) continue;
+      const next = clean ? text.replace(re, (line) => `- **${label}:** ${clean}${line.endsWith('\n') ? '\n' : ''}`) : text.replace(re, '');
       return { [s]: next };
     }
   }
   if (!clean) return {};
   // Campo nuevo: va justo después del último "- **Campo:** valor" del archivo, no al final (notas, fecha).
-  const content = docs[slug].content;
+  const content = docs[slug]?.content ?? '';
   const fields = [...content.matchAll(/^- \*\*[^*]+:\*\*.*$/gm)];
   const last = fields[fields.length - 1];
   if (!last || last.index === undefined) return { [slug]: upsertField(content, slug, labels[0], clean) };

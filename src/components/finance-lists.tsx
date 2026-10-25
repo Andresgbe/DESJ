@@ -5,6 +5,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { DateField } from '@/components/date-field';
 import { Btn, Field } from '@/components/form';
 import { IconBtn } from '@/components/finance';
 import { IconBack, IconCheck, IconChevron, IconPencil, IconTrash } from '@/components/icons';
@@ -119,7 +120,7 @@ function BillForm({ initial, onSave, onCancel }: { initial?: Bill; onSave: (inpu
           <Field label="Monto" placeholder="0,00" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
         </View>
         <View style={{ flex: 1 }}>
-          <Field label="Vence" placeholder="DD/MM/AAAA" value={due} onChangeText={setDue} keyboardType="numbers-and-punctuation" maxLength={10} />
+          <DateField label="Vence" value={due} onChange={setDue} future clearable placeholder="Opcional" />
         </View>
       </View>
       <Row style={{ justifyContent: 'flex-end' }}>

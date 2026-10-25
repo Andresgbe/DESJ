@@ -1,15 +1,18 @@
 // Pantalla · Conocimiento (desde el menú de perfil).
 // Entrevista: DESJ pregunta y con cada respuesta reescribe tus archivos Markdown.
-// Archivos: ver y editar a mano perfil.md, salud.md, negocios.md y preferencias.md.
+// Archivos: ver, editar, renombrar y borrar los de base (perfil, salud, negocios, preferencias) y crear los tuyos.
 import * as Haptics from 'expo-haptics';
 import { useEffect, useRef, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 
+import { Btn, Field } from '@/components/form';
+import { IconPlus } from '@/components/icons';
 import { Card, Label, Mono, Row } from '@/components/ui';
 import { askDesj } from '@/lib/brain';
-import { FILES, nextQuestion, QUESTIONS, Slug, useKnowledge } from '@/lib/knowledge';
+import { confirm, notify } from '@/lib/confirm';
+import { listFiles, nextQuestion, QUESTIONS, Slug, useKnowledge } from '@/lib/knowledge';
 import { C, mono } from '@/theme';
 
 type Msg = { id: string; from: 'me' | 'desj'; text: string };
@@ -149,11 +152,13 @@ function Interview({ k }: { k: K }) {
 function Files({ k }: { k: K }) {
   const [editing, setEditing] = useState<Slug | null>(null);
   const [draft, setDraft] = useState('');
+  const [renaming, setRenaming] = useState<{ slug: Slug; title: string } | null>(null);
+  const [creating, setCreating] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const startEdit = (slug: Slug) => {
     setEditing(slug);
-    setDraft(k.docs[slug].content);
+    setDraft(k.docs[slug]?.content ?? '');
     setError(null);
   };
 
@@ -163,24 +168,64 @@ function Files({ k }: { k: K }) {
     else setError('No pude guardar. Revisa tu conexión.');
   };
 
+  const create = async () => {
+    if (!creating?.trim()) return;
+    const slug = await k.createDoc(creating);
+    if (!slug) return notify('No pude crear el archivo. Revisa tu conexión.');
+    setCreating(null);
+    startEdit(slug);
+  };
+
+  const rename = async () => {
+    if (!renaming) return;
+    if (!(await k.renameDoc(renaming.slug, renaming.title))) notify('No pude cambiar el nombre. Revisa tu conexión.');
+    setRenaming(null);
+  };
+
+  const remove = async (slug: Slug, title: string, core: boolean) => {
+    const msg = core
+      ? `Se borra todo lo que tiene "${title}". El archivo queda vacío porque la app lo usa (Mis datos, YO).`
+      : `Se borra "${title}" y todo lo que tiene. DESJ deja de leerlo.`;
+    if (!(await confirm('Eliminar archivo', msg, 'Eliminar'))) return;
+    if (!(await k.removeDoc(slug))) notify('No pude eliminarlo. Revisa tu conexión.');
+  };
+
   return (
     <ScrollView contentContainerStyle={{ gap: 12, paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
-      {FILES.map((f) => {
+      {creating !== null ? (
+        <Card glow>
+          <Field label="Nombre del archivo nuevo" placeholder="Ej. Familia, Proyectos, Rutina" value={creating} onChangeText={setCreating} onSubmitEditing={create} autoFocus maxLength={60} />
+          <Row style={{ justifyContent: 'flex-end' }}>
+            <Btn label="Cancelar" kind="ghost" onPress={() => setCreating(null)} style={styles.small} />
+            <Btn label="Crear" onPress={create} style={styles.small} />
+          </Row>
+        </Card>
+      ) : (
+        <Btn label="Nuevo archivo" kind="outline" icon={<IconPlus color={C.chipText} />} onPress={() => setCreating('')} />
+      )}
+
+      {listFiles(k.docs).map((f) => {
         const doc = k.docs[f.slug];
         const isEditing = editing === f.slug;
         return (
           <Card key={f.slug} glow={isEditing}>
-            <Row>
-              <View style={{ flex: 1 }}>
-                <Mono style={{ color: C.accentSoft, fontSize: 13 }}>{`${f.slug}.md`}</Mono>
-                <Text style={styles.hint}>{f.hint}</Text>
+            {renaming?.slug === f.slug ? (
+              <View style={{ gap: 8 }}>
+                <Field label="Nombre" value={renaming.title} onChangeText={(title) => setRenaming({ slug: f.slug, title })} onSubmitEditing={rename} autoFocus maxLength={60} />
+                <Row style={{ justifyContent: 'flex-end' }}>
+                  <Btn label="Cancelar" kind="ghost" onPress={() => setRenaming(null)} style={styles.small} />
+                  <Btn label="Guardar" onPress={rename} style={styles.small} />
+                </Row>
               </View>
-              {!isEditing ? (
-                <Pressable onPress={() => startEdit(f.slug)} style={styles.editBtn} hitSlop={6} accessibilityRole="button" accessibilityLabel={`Editar ${f.slug}.md`}>
-                  <Label style={{ color: C.accentSoft }}>Editar</Label>
-                </Pressable>
-              ) : null}
-            </Row>
+            ) : (
+              <Row>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={styles.fileTitle}>{f.title}</Text>
+                  <Mono style={{ color: C.accentSoft, fontSize: 12 }}>{`${f.slug}.md`}</Mono>
+                  {f.hint ? <Text style={styles.hint}>{f.hint}</Text> : null}
+                </View>
+              </Row>
+            )}
 
             {isEditing ? (
               <>
@@ -196,16 +241,24 @@ function Files({ k }: { k: K }) {
                 />
                 {error ? <Text style={{ color: C.bad, fontSize: 13 }}>{error}</Text> : null}
                 <Row>
-                  <Pressable onPress={() => setEditing(null)} style={[styles.wide, styles.ghost]}><Text style={[styles.wideText, { color: C.muted }]}>Cancelar</Text></Pressable>
-                  <Pressable onPress={save} style={[styles.wide, { backgroundColor: C.accent }]}><Text style={[styles.wideText, { color: C.onAccent }]}>Guardar</Text></Pressable>
+                  <Btn label="Cancelar" kind="ghost" onPress={() => setEditing(null)} />
+                  <Btn label="Guardar" onPress={save} />
                 </Row>
               </>
-            ) : doc.content ? (
+            ) : doc?.content ? (
               <Text style={styles.md}>{doc.content}</Text>
             ) : (
               <Text style={styles.hint}>Vacío. Llénalo con la entrevista o edítalo a mano.</Text>
             )}
-            {doc.updatedAt && !isEditing ? <Label style={{ fontSize: 9.5 }}>{`Actualizado ${new Date(doc.updatedAt).toLocaleDateString('es-VE')}`}</Label> : null}
+
+            {!isEditing && renaming?.slug !== f.slug ? (
+              <Row>
+                {doc?.updatedAt ? <Label style={{ fontSize: 9.5, flex: 1 }}>{`Actualizado ${new Date(doc.updatedAt).toLocaleDateString('es-VE')}`}</Label> : <View style={{ flex: 1 }} />}
+                <Btn label="Editar" kind="outline" onPress={() => startEdit(f.slug)} style={styles.small} />
+                <Btn label="Renombrar" kind="ghost" onPress={() => setRenaming({ slug: f.slug, title: f.title })} style={styles.small} />
+                <Btn label="Eliminar" kind="danger" onPress={() => remove(f.slug, f.title, f.core)} style={styles.small} />
+              </Row>
+            ) : null}
           </Card>
         );
       })}
@@ -238,10 +291,8 @@ const styles = StyleSheet.create({
   input: { flex: 1, color: C.text, fontSize: 15, minHeight: 40 },
   send: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
   hint: { color: C.muted, fontSize: 12.5 },
-  editBtn: { minHeight: 34, paddingHorizontal: 10, justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: C.cardBorder },
+  fileTitle: { color: C.text, fontSize: 15.5, fontWeight: '600' },
+  small: { flexGrow: 0, minHeight: 40, paddingHorizontal: 12 },
   md: { color: C.text, fontFamily: mono, fontSize: 12.5, lineHeight: 19 },
   editor: { color: C.text, fontFamily: mono, fontSize: 13, lineHeight: 19, minHeight: 200, borderWidth: 1, borderColor: C.cardBorder, borderRadius: 12, padding: 12, backgroundColor: C.surfaceSunken },
-  wide: { flex: 1, minHeight: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  wideText: { fontSize: 14.5, fontWeight: '700' },
-  ghost: { borderWidth: 1, borderColor: C.cardBorder },
 });

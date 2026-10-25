@@ -129,7 +129,7 @@ export const IconChevron = ({ color, size = 18 }: P) => (
   </Svg>
 );
 
-// Pestaña Módulos y tipos de módulo.
+// Pestaña Módulos y tipos de módulo (Negocios usa IconBusiness).
 export const IconGrid = ({ color, size = 22 }: P) => (
   <Svg {...base(size, color)}>
     <Rect x={3.5} y={3.5} width={7} height={7} rx={1.6} />
@@ -149,35 +149,9 @@ export const IconCar = ({ color, size = 22 }: P) => (
   </Svg>
 );
 
-export const IconHome = ({ color, size = 22 }: P) => (
-  <Svg {...base(size, color)}>
-    <Path d="M3 11l9-7 9 7" />
-    <Path d="M5 9.5V20h14V9.5" />
-    <Path d="M10 20v-6h4v6" />
-  </Svg>
-);
 
-export const IconPaw = ({ color, size = 22 }: P) => (
-  <Svg {...base(size, color)}>
-    <Path d="M12 13c-3 0-5 3-5 5 0 1.5 1.2 2 2.5 2 1 0 1.7-.5 2.5-.5s1.5.5 2.5.5c1.3 0 2.5-.5 2.5-2 0-2-2-5-5-5z" />
-    <Circle cx={6.5} cy={10} r={1.6} />
-    <Circle cx={9.5} cy={5.8} r={1.6} />
-    <Circle cx={14.5} cy={5.8} r={1.6} />
-    <Circle cx={17.5} cy={10} r={1.6} />
-  </Svg>
-);
 
-export const IconPlane = ({ color, size = 22 }: P) => (
-  <Svg {...base(size, color)}>
-    <Path d="M10.5 13.5L3 11l1.5-1.5 8 .5 4.5-4.5c1-1 2.5-1.2 3-.5.7.5.5 2-.5 3L15 12.5l.5 8L14 22l-2.5-7.5" />
-  </Svg>
-);
 
-export const IconFolder = ({ color, size = 22 }: P) => (
-  <Svg {...base(size, color)}>
-    <Path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-  </Svg>
-);
 
 export const IconArrowUp = ({ color, size = 18 }: P) => (
   <Svg {...base(size, color)}>

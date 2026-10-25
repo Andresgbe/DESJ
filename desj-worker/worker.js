@@ -150,7 +150,8 @@ async function handle(msg) {
       db.from('profiles').select('timezone').eq('id', msg.user_id).single(),
     ]);
     if (!conv) return fail(msg, 'Esa conversación ya no existe.');
-    const ctx = await loadContext(db, msg.user_id, msg.context?.agenda ?? null, msg.conversation_id);
+    const hasFiles = (Array.isArray(msg.attachments) && msg.attachments.length > 0) || Boolean(msg.attachment_path);
+    const ctx = await loadContext(db, msg.user_id, msg.context?.agenda ?? null, msg.conversation_id, { message: msg.content, hasFiles, mode: conv.kind });
     const today = todayIn(profile?.timezone || 'America/Caracas');
 
     // Adjuntos (hasta 5, numerados): se bajan a la carpeta temporal, que es lo único que Read puede abrir.

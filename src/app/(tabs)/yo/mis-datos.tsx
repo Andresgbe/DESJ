@@ -5,6 +5,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { DateField } from '@/components/date-field';
 import { Btn, Field } from '@/components/form';
 import { Card, Label, Row, Screen, Title } from '@/components/ui';
 import { notify } from '@/lib/confirm';
@@ -72,7 +73,20 @@ export default function MisDatos() {
     notify('Listo. Tus datos quedaron guardados y DESJ ya los conoce.');
   };
 
-  const field = (d: Def) => (
+  const field = (d: Def) =>
+    d.id === 'nacimiento' ? (
+      <DateField
+        key={d.id}
+        label={d.title}
+        value={values[d.id] ?? ''}
+        onChange={(v) => {
+          setDirty(true);
+          setValues((x) => ({ ...x, [d.id]: v }));
+        }}
+        clearable
+        hint={edad !== null ? `${edad} años` : 'Usa « » para cambiar de año.'}
+      />
+    ) : (
     <Field
       key={d.id}
       label={d.title}
@@ -84,7 +98,6 @@ export default function MisDatos() {
       }}
       keyboardType={d.keyboard}
       multiline={d.multiline}
-      hint={d.id === 'nacimiento' && edad !== null ? `${edad} años` : undefined}
     />
   );
 

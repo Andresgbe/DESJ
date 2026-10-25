@@ -5,6 +5,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { fetchRates, RATE_CODE_MAP } from '../_shared/dolar.ts';
+import { loadSection, type Section, SECTIONS } from './context.ts';
 
 export type Actions = {
   reminders: { id: string; title: string; body: string; due_at: string; repeat: 'none' | 'daily' }[];
@@ -16,7 +17,9 @@ export type Actions = {
   financeChanged?: boolean;
 };
 
+/** Archivos de base de Conocimiento; la persona puede tener más (cualquier slug de <conocimiento>). */
 export const KNOWLEDGE_FILES = ['perfil', 'salud', 'negocios', 'preferencias'];
+const SLUG = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
 /** Un archivo de Storage que Claude debe ver (adjunto del chat o archivo de un examen). */
 export type FileRef = { path: string; name: string; mime: string };
@@ -35,15 +38,16 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: 'actualizar_conocimiento',
     description:
-      'Reescribe completo uno de los archivos Markdown de conocimiento de la persona (perfil, salud, negocios, preferencias). Conserva lo que ya tenía y agrega o corrige lo nuevo.',
+      'Reescribe completo uno de los archivos Markdown de <conocimiento> (perfil, salud, negocios, preferencias o cualquier otro que la persona tenga). Conserva lo que ya tenía y agrega o corrige lo nuevo. Para crear un archivo nuevo solo si la persona lo pide, usa un slug nuevo (minúsculas y guiones, ej. "familia") y un titulo.',
     strict: true,
     input_schema: {
       type: 'object',
       properties: {
-        archivo: { type: 'string', enum: KNOWLEDGE_FILES },
+        archivo: { type: 'string', description: 'El slug del archivo (lo que va antes de .md en <conocimiento>).' },
+        titulo: { type: 'string', description: 'Nombre visible si el archivo es nuevo; cadena vacía si ya existe.' },
         contenido: { type: 'string', description: 'El archivo completo en Markdown.' },
       },
-      required: ['archivo', 'contenido'],
+      required: ['archivo', 'titulo', 'contenido'],
       additionalProperties: false,
     },
   },
@@ -241,19 +245,68 @@ export const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
-    name: 'agregar_registro_modulo',
+    name: 'abrir_seccion',
     description:
-      'Anota un registro en uno de los módulos de <modulos> (bitácora de Vehículo, Hogar, Mascotas, etc.), p. ej. "Cambio de aceite" con fecha y "45.000 km" de detalle. fecha en YYYY-MM-DD o cadena vacía si no aplica. No sirve para el módulo de negocios.',
+      'Carga un área que no está en <secciones_cargadas>: salud (medicamentos, historial médico, contactos), finanzas (mes en curso, tasas, movimientos) o modulos (negocios y vehículos con su ficha, mantenimientos y papeles). Úsala solo si la necesitas para responder o para tener los ids de una herramienta.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: { seccion: { type: 'string', enum: SECTIONS } },
+      required: ['seccion'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'registrar_mantenimiento',
+    description:
+      'Anota un mantenimiento en un vehículo de <modulos> ("le cambié el aceite a la Hilux a los 45.000 km, el próximo a los 50.000"). tipo: aceite, frenos, cauchos, bateria, revision, reparacion u otro. fecha YYYY-MM-DD (cadena vacía = hoy). km, costo (en $), proximo_km: números, o 0 si no se dijo. proxima_fecha YYYY-MM-DD o cadena vacía. Si el km es mayor que el kilometraje guardado, lo actualiza.',
     strict: true,
     input_schema: {
       type: 'object',
       properties: {
-        modulo_id: { type: 'string', description: 'El id que aparece en <modulos>.' },
-        titulo: { type: 'string' },
-        fecha: { type: 'string', description: 'YYYY-MM-DD o cadena vacía.' },
-        detalle: { type: 'string', description: 'Cadena vacía si no hay.' },
+        modulo_id: { type: 'string', description: 'El id del vehículo en <modulos>.' },
+        tipo: { type: 'string', enum: ['aceite', 'frenos', 'cauchos', 'bateria', 'revision', 'reparacion', 'otro'] },
+        detalle: { type: 'string', description: 'Qué se hizo; cadena vacía si no hace falta.' },
+        fecha: { type: 'string' },
+        km: { type: 'number' },
+        costo: { type: 'number' },
+        taller: { type: 'string' },
+        proximo_km: { type: 'number' },
+        proxima_fecha: { type: 'string' },
+        notas: { type: 'string' },
       },
-      required: ['modulo_id', 'titulo', 'fecha', 'detalle'],
+      required: ['modulo_id', 'tipo', 'detalle', 'fecha', 'km', 'costo', 'taller', 'proximo_km', 'proxima_fecha', 'notas'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'actualizar_km',
+    description: 'Actualiza el kilometraje actual de un vehículo de <modulos> ("la Hilux ya tiene 47.300 km").',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: { modulo_id: { type: 'string' }, km: { type: 'number' } },
+      required: ['modulo_id', 'km'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'guardar_papel_vehiculo',
+    description:
+      'Guarda un papel de un vehículo de <modulos> (seguro, revisión, título, permiso u otro) con su número y vencimiento. Si la persona mandó la foto o el PDF en este mensaje, pon su número en archivo (1, 2…); si no, 0. vence YYYY-MM-DD o cadena vacía. Si ya existe un papel del mismo tipo para ese vehículo y es una renovación, usa la misma herramienta: se reemplaza.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: {
+        modulo_id: { type: 'string' },
+        tipo: { type: 'string', enum: ['seguro', 'revision', 'titulo', 'permiso', 'otro'] },
+        nombre: { type: 'string', description: 'Ej. "Seguro RCV"; cadena vacía para el nombre del tipo.' },
+        numero: { type: 'string' },
+        vence: { type: 'string' },
+        notas: { type: 'string' },
+        archivo: { type: 'integer', description: 'Número del archivo de este mensaje, o 0.' },
+      },
+      required: ['modulo_id', 'tipo', 'nombre', 'numero', 'vence', 'notas', 'archivo'],
       additionalProperties: false,
     },
   },
@@ -320,6 +373,26 @@ export const TOOLS: Anthropic.Tool[] = [
 
 type Input = Record<string, unknown>;
 const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+
+const CORE_TITLES: Record<string, string> = { perfil: 'Perfil', salud: 'Salud', negocios: 'Negocios', preferencias: 'Preferencias' };
+
+const PAPER_LABELS: Record<string, string> = { seguro: 'Seguro', revision: 'Revisión', titulo: 'Título', permiso: 'Permiso', otro: 'Papel' };
+
+const positiveInt = (v: unknown) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Math.round(Number(v)) : null);
+
+/** El módulo Vehículo de esta persona; lanza Error si no existe. */
+async function vehicleOf(db: SupabaseClient, userId: string, id: string) {
+  const { data } = await db.from('modules').select('id, name').eq('id', id).eq('user_id', userId).eq('kind', 'vehiculo').maybeSingle();
+  if (!data) throw new Error('no encontré ese vehículo en <modulos>');
+  return data as { id: string; name: string };
+}
+
+/** Sube el kilometraje guardado si el nuevo es mayor. */
+async function bumpOdometer(db: SupabaseClient, userId: string, moduleId: string, km: number, date: string) {
+  const { data } = await db.from('vehicles').select('odometer_km').eq('module_id', moduleId).maybeSingle();
+  if (data?.odometer_km != null && data.odometer_km >= km) return;
+  await db.from('vehicles').upsert({ module_id: moduleId, user_id: userId, odometer_km: km, odometer_on: date, updated_at: new Date().toISOString() }, { onConflict: 'module_id' });
+}
 
 const RATE_LABELS: Record<string, { label: string; currency: string }> = {
   BCV: { label: 'Bolívares (Bs)', currency: 'VES' },
@@ -395,13 +468,15 @@ export async function runTool(
 ): Promise<ToolOutput> {
   switch (name) {
     case 'actualizar_conocimiento': {
-      const slug = str(input.archivo);
+      const slug = str(input.archivo).toLowerCase();
       const content = str(input.contenido);
-      if (!KNOWLEDGE_FILES.includes(slug)) throw new Error('archivo desconocido');
+      if (!SLUG.test(slug)) throw new Error('archivo debe ser un slug: minúsculas, números y guiones');
       if (!content || content.length > 20000) throw new Error('contenido vacío o demasiado largo');
+      const { data: existing } = await db.from('knowledge').select('title').eq('user_id', ctx.userId).eq('slug', slug).maybeSingle();
+      const title = existing?.title || str(input.titulo).slice(0, 60) || CORE_TITLES[slug] || slug;
       const { error } = await db
         .from('knowledge')
-        .upsert({ user_id: ctx.userId, slug, content, updated_at: new Date().toISOString() }, { onConflict: 'user_id,slug' });
+        .upsert({ user_id: ctx.userId, slug, title, content, updated_at: new Date().toISOString() }, { onConflict: 'user_id,slug' });
       if (error) throw error;
       ctx.actions.knowledgeChanged = true;
       return `${slug}.md actualizado.`;
@@ -552,19 +627,72 @@ export async function runTool(
       if (error) throw error;
       return count ? 'Anotado en el registro.' : 'No encontré ese registro.';
     }
-    case 'agregar_registro_modulo': {
-      const title = str(input.titulo).slice(0, 200);
-      const date = str(input.fecha);
-      if (!title) throw new Error('titulo vacío');
-      if (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(new Date(date).getTime()))) throw new Error('fecha debe ser YYYY-MM-DD');
-      const { data: mod } = await db.from('modules').select('id, kind, name').eq('id', str(input.modulo_id)).eq('user_id', ctx.userId).maybeSingle();
-      if (!mod) return 'No encontré ese módulo.';
-      if (mod.kind === 'negocios') return 'El módulo de negocios no lleva registros; guárdalo como memoria o en negocios.md.';
-      const { error } = await db
-        .from('module_entries')
-        .insert({ user_id: ctx.userId, module_id: mod.id, title, entry_date: date || null, details: str(input.detalle).slice(0, 4000) });
+    case 'abrir_seccion': {
+      const section = str(input.seccion) as Section;
+      if (!SECTIONS.includes(section)) throw new Error('sección desconocida');
+      return (await loadSection(db, ctx.userId, section, ctx.today)).join('\n');
+    }
+    case 'registrar_mantenimiento': {
+      const mod = await vehicleOf(db, ctx.userId, str(input.modulo_id));
+      const date = str(input.fecha) || ctx.today;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > ctx.today) throw new Error('fecha debe ser YYYY-MM-DD y no futura');
+      const nextDate = str(input.proxima_fecha);
+      if (nextDate && !/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) throw new Error('proxima_fecha debe ser YYYY-MM-DD');
+      const km = positiveInt(input.km);
+      const { error } = await db.from('vehicle_services').insert({
+        user_id: ctx.userId,
+        module_id: mod.id,
+        kind: str(input.tipo) || 'otro',
+        title: str(input.detalle),
+        service_date: date,
+        km,
+        cost: Number(input.costo) > 0 ? Number(input.costo) : null,
+        shop: str(input.taller),
+        next_km: positiveInt(input.proximo_km),
+        next_date: nextDate || null,
+        notes: str(input.notas),
+      });
       if (error) throw error;
-      return `Registro anotado en ${mod.name}${date ? ` con fecha ${date}` : ''}.`;
+      if (km !== null) await bumpOdometer(db, ctx.userId, mod.id, km, date);
+      return `Mantenimiento anotado en ${mod.name}${km !== null ? ` a los ${km} km` : ''}.`;
+    }
+    case 'actualizar_km': {
+      const mod = await vehicleOf(db, ctx.userId, str(input.modulo_id));
+      const km = positiveInt(input.km);
+      if (km === null) throw new Error('km debe ser un número mayor que cero');
+      const { error } = await db
+        .from('vehicles')
+        .upsert({ module_id: mod.id, user_id: ctx.userId, odometer_km: km, odometer_on: ctx.today, updated_at: new Date().toISOString() }, { onConflict: 'module_id' });
+      if (error) throw error;
+      return `${mod.name}: kilometraje actualizado a ${km} km.`;
+    }
+    case 'guardar_papel_vehiculo': {
+      const mod = await vehicleOf(db, ctx.userId, str(input.modulo_id));
+      const kind = str(input.tipo) || 'otro';
+      const expires = str(input.vence);
+      if (expires && !/^\d{4}-\d{2}-\d{2}$/.test(expires)) throw new Error('vence debe ser YYYY-MM-DD');
+      const n = Number(input.archivo);
+      const file = n ? (ctx.attachments ?? [])[n - 1] : undefined;
+      if (n && !file) throw new Error(`el archivo ${n} no existe en este mensaje`);
+      let filePatch = {};
+      if (file) {
+        if (!file.path.startsWith(`${ctx.userId}/`)) throw new Error('adjunto no válido');
+        const to = `${ctx.userId}/vehiculos/${mod.id}/${Date.now()}-${file.path.split('/').pop()}`;
+        const copied = await db.storage.from('documentos').copy(file.path, to);
+        if (copied.error) throw new Error(`no pude guardar el archivo: ${copied.error.message}`);
+        filePatch = { storage_path: to, file_name: file.name.slice(0, 200), mime: file.mime };
+      }
+      const row = { name: (str(input.nombre) || PAPER_LABELS[kind] || 'Papel').slice(0, 120), number: str(input.numero), expires_on: expires || null, notes: str(input.notas), ...filePatch };
+      // Renovación: si ya hay un papel de ese tipo (salvo "otro"), se reemplaza.
+      const { data: existing } = kind === 'otro'
+        ? { data: null }
+        : await db.from('vehicle_documents').select('id, storage_path').eq('module_id', mod.id).eq('user_id', ctx.userId).eq('kind', kind).maybeSingle();
+      const { error } = existing
+        ? await db.from('vehicle_documents').update(row).eq('id', existing.id)
+        : await db.from('vehicle_documents').insert({ ...row, kind, module_id: mod.id, user_id: ctx.userId });
+      if (error) throw error;
+      if (file && existing?.storage_path) await db.storage.from('documentos').remove([existing.storage_path]);
+      return `${row.name} de ${mod.name} ${existing ? 'actualizado' : 'guardado'}${expires ? `, vence el ${expires}` : ''}${file ? ', con su archivo' : ''}.`;
     }
     case 'registrar_movimiento': {
       const kind = input.tipo === 'ingreso' ? 'income' : 'expense';

@@ -82,7 +82,7 @@ Encuesta: propósito = *ahorrar tiempo en tareas repetitivas*; tipo = *app o pla
 | Salud · pastillas | Varias dosis al día (1–12), cada una con hora opcional; se marca cada dosis; avisos solo para dosis con hora | 1 ✅ |
 | Mis datos | YO · Mis datos: formulario de datos básicos y médicos que escribe en perfil.md y salud.md (se ve en Conocimiento) | 1 ✅ |
 | Finanzas | YO · Finanzas: Ingresos y gastos en Bs, dólar BCV, efectivo, USDT y euro llevados a dólar BCV (tasas de DolarAPI), con gráfica diaria, desglose por categoría, tasas y categorías editables; Deudas; Presupuesto mensual (recurrentes + puntuales). DESJ registra movimientos desde el chat (`registrar_movimiento`, `actualizar_tasas`, `fijar_tasa`) | 1 ✅ |
-| Módulos | Pestaña MÓDULOS: la persona agrega, quita y ordena módulos (Negocios, Vehículo, Hogar, Mascotas, Viajes, Documentos, Otro). Negocios abre su vista; los demás son una bitácora de registros (título, fecha, detalle) que DESJ ve y llena con `agregar_registro_modulo` | 1 ✅ |
+| Módulos | Pestaña MÓDULOS con catálogo cerrado: la persona agrega, quita y ordena módulos, y cada tipo tiene su propia vista. Hoy: **Negocios** (uno) y **Vehículo** (uno por carro: ficha y kilometraje, mantenimientos con el próximo por km o fecha, papeles con vencimiento y foto/PDF, y "Próximos" arriba). DESJ: `registrar_mantenimiento`, `actualizar_km`, `guardar_papel_vehiculo` | 1 ✅ |
 | Salud · Garmin | Sueño, FC reposo, pasos, entrenos vía Apple Health | 2 |
 | Ganadería | Rebaño por lotes, pesajes, vacunas, partos, alertas sanitarias | 2 |
 | Legal (inmuebles y carros) | Responde con base en leyes venezolanas cargadas, cita la fuente, checklists y plantillas | 2 |
@@ -127,8 +127,8 @@ src/
     (tabs)/yo/examen/[id].tsx ← detalle de un registro del historial: datos, archivos por tipo con vista previa y descarga, editar, borrar
     (tabs)/yo/mis-datos.tsx ← YO · Mis datos: formulario que escribe en perfil.md / salud.md
     (tabs)/yo/finanzas.tsx ← YO · Finanzas: pestañas Ingresos y gastos, Deudas, Presupuesto
-    (tabs)/modulos/index.tsx ← MÓDULOS: lista de módulos; agregar, editar, quitar y ordenar
-    (tabs)/modulos/[id].tsx ← bitácora de un módulo (registros con título, fecha y detalle)
+    (tabs)/modulos/index.tsx ← MÓDULOS: tus módulos; catálogo para agregar; quitar y ordenar
+    (tabs)/modulos/[id].tsx ← módulo Vehículo: próximos, ficha, mantenimientos y papeles
     (tabs)/modulos/negocios.tsx ← ganadería, legal, mercado (datos de EJEMPLO)
     (tabs)/pendientes.tsx  ← tareas por hacer (Atrasados, Hoy, Próximos, Sin fecha, Hechos); DESJ las crea/completa
     conocimiento.tsx       ← entrevista + archivos Markdown que DESJ lee antes de cada respuesta
@@ -147,7 +147,8 @@ src/
     login.tsx, icons.tsx
     form.tsx               ← Field, Choice, Btn: controles de formulario de los módulos
     health.tsx             ← piezas de Salud: formulario y fila de examen, contactos, selector de archivos
-    modules.tsx            ← ícono por tipo de módulo y formulario de módulo
+    modules.tsx            ← ícono por tipo de módulo y catálogo de módulos disponibles
+    vehicle.tsx            ← módulo Vehículo: ficha, mantenimientos y papeles (formularios y tarjetas)
     finance.tsx            ← Finanzas: gráfica SVG del mes, tasas, categorías, totales, lista y formulario de movimiento
     finance-lists.tsx      ← Finanzas: pestañas Deudas y Presupuesto, selector de mes
   lib/
@@ -155,7 +156,8 @@ src/
     chats.tsx              ← historial de conversaciones (local o Supabase)
     knowledge.ts           ← archivos de conocimiento + entrevista guiada sin nube; writeField (Mis datos)
     health.ts              ← exámenes, archivos de exámenes y contactos de salud (local o Supabase)
-    modules.ts             ← módulos y sus registros (local o Supabase)
+    modules.ts             ← catálogo (CATALOG) y módulos de la persona (local o Supabase)
+    vehicles.ts            ← módulo Vehículo: ficha, mantenimientos, papeles y cálculo de "Próximos"
     dates.ts               ← fechas DD/MM/AAAA ↔ YYYY-MM-DD, "14 mar 2023", "hace 3 años"
     finance.ts             ← Finanzas: conversión a dólar BCV, totales, datos (local o Supabase) · dolar-api.ts ← tasas de hoy: Edge Function `tasas` (DolarAPI + USDT de Binance P2P, como cc-sacramento; código en supabase/functions/_shared/dolar.ts) o DolarAPI directo sin sesión
     reminders.ts           ← registro de recordatorios de DESJ (notificaciones locales)
@@ -195,6 +197,8 @@ Inspirada en el carrusel de Adrián y en los grafos tipo "Jarvis": fondo casi ne
 **Núcleo (18 oct 2026):** sin saludo ni fecha. Al entrar solo se ve DESJ grande y centrado con el botón **HABLAR CON DESJ**; al tocarlo el cerebro se achica y sube (450 ms) y aparece la conversación. Historial, conversación nueva, voz y "Volver a DESJ" están en el menú hamburguesa del header.
 
 **Módulo YO (18 oct 2026):** la pestaña Salud se reemplazó por **YO**. Muestra una armadura holográfica genérica que gira (inspirada en la referencia; no es el modelo de Iron Man, que es de Marvel) con tus datos a los lados, leídos de perfil.md y salud.md con el formato `- **Campo:** valor` (Talla, Peso, Tipo de sangre, Fecha de nacimiento o Edad). Adentro viven los módulos personales: Salud, Plan físico y Tus datos.
+
+**Módulos con catálogo (24 oct 2026):** "Agregar módulo" muestra el catálogo; cada módulo es distinto (no hay bitácora genérica: `module_entries` quedó sin uso). Por ahora el catálogo tiene Negocios (uno por persona, índice único) y Vehículo (varios; tablas `vehicles`, `vehicle_services`, `vehicle_documents`; archivos en `documentos/<usuario>/vehiculos/<módulo>/`). "Próximos" avisa papeles que vencen en 30 días o menos y servicios a 1.000 km o 30 días. Los avisos son en pantalla y por DESJ; no hay notificación push en la versión web.
 
 **Finanzas (23 oct 2026):** réplica del módulo Finance de NEXUS adaptada a DESJ (español de "tú", tokens HUD, chips en vez de selects). Regla: `amount_usd = amount / rate_per_usd`, guardado con el movimiento (cambiar una tasa no toca lo registrado); las tasas nacen en null y nunca se inventan. Tablas `finance_categories`, `finance_rates`, `finance_transactions`, `finance_bills`, `finance_monthly_budget`; se siembran al abrir Finanzas si la cuenta no tiene categorías ni tasas. Los colores de categoría son datos de la persona (paleta en `lib/finance.ts`), no tokens de la interfaz.
 

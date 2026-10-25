@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
     if (!conv) return json({ error: 'Esa conversación ya no existe.' }, 404);
   }
 
-  const ctx = await loadContext(db, auth.user.id, agenda, conversationId);
+  const ctx = await loadContext(db, auth.user.id, agenda, conversationId, { message, hasFiles: attachments.length > 0, mode });
   const actions: Actions = { reminders: [], events: [], medsChanged: false, intakesChanged: false, knowledgeChanged: false, tasksChanged: false };
   const client = new Anthropic({ apiKey });
 

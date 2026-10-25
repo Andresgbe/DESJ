@@ -5,6 +5,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { DateField } from '@/components/date-field';
 import { Btn, Choice, Field } from '@/components/form';
 import { IconChevron, IconClip, IconFile } from '@/components/icons';
 import { Card, Label, Mono, Row } from '@/components/ui';
@@ -60,15 +61,7 @@ export function ExamForm({
     <Card glow>
       <Label style={{ color: C.accentSoft }}>{initial ? 'Editar registro' : 'Nuevo registro'}</Label>
       <Choice<ExamKind> label="Qué fue" options={EXAM_KINDS} value={form.kind} onChange={(k) => set({ kind: k })} />
-      <Field
-        label="Fecha"
-        placeholder="DD/MM/AAAA"
-        hint="Cuándo pasó, aunque lo cargues después. Así queda en su lugar en el historial."
-        value={dateText}
-        onChangeText={setDateText}
-        keyboardType="numbers-and-punctuation"
-        maxLength={10}
-      />
+      <DateField label="Fecha" hint="Cuándo pasó, aunque lo cargues después. Así queda en su lugar en el historial." value={dateText} onChange={setDateText} />
       <Field label="Nombre" placeholder={`Opcional. Si lo dejas vacío: "${kind.title}"`} value={form.title} onChangeText={(title) => set({ title })} />
       <Field label="Clínica o laboratorio" placeholder="Opcional" value={form.place} onChangeText={(place) => set({ place })} />
       <Field label="Doctor" placeholder="Opcional. Ej. Dra. Pérez, cardiología" value={form.doctor} onChangeText={(doctor) => set({ doctor })} />
@@ -99,7 +92,7 @@ export function ExamForm({
 }
 
 /** Primero qué es el documento (informe, orden…), después de dónde sale: galería, cámara (teléfono) o archivo. Varios a la vez. */
-export function FilePicker({ onPick, disabled }: { onPick: (a: Attachment, docType: DocType) => void | Promise<void>; disabled?: boolean }) {
+export function FilePicker({ onPick, disabled, withType = true }: { onPick: (a: Attachment, docType: DocType) => void | Promise<void>; disabled?: boolean; withType?: boolean }) {
   const [docType, setDocType] = useState<DocType>('informe');
   const pick = async (source: 'galeria' | 'camara' | 'archivo') => {
     try {
@@ -110,7 +103,7 @@ export function FilePicker({ onPick, disabled }: { onPick: (a: Attachment, docTy
   };
   return (
     <View style={{ gap: 8 }}>
-      <Choice<DocType> label="Tipo de documento" options={DOC_TYPES} value={docType} onChange={setDocType} />
+      {withType ? <Choice<DocType> label="Tipo de documento" options={DOC_TYPES} value={docType} onChange={setDocType} /> : null}
       <View style={styles.picker}>
         <Btn label="Foto" kind="outline" icon={<IconClip color={C.chipText} size={16} />} onPress={() => pick('galeria')} disabled={disabled} />
         {Platform.OS !== 'web' ? <Btn label="Cámara" kind="outline" onPress={() => pick('camara')} disabled={disabled} /> : null}
