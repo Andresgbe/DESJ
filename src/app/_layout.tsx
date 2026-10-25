@@ -56,6 +56,7 @@ function Gate() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="conocimiento" options={{ title: 'CONOCIMIENTO' }} />
           <Stack.Screen name="ajustes" options={{ title: 'AJUSTES' }} />
+          <Stack.Screen name="google" options={{ title: 'GOOGLE' }} />
         </Stack>
       </ChatsProvider>
     </StoreProvider>

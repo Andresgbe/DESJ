@@ -14,11 +14,13 @@ function Detener {
   if (Get-ScheduledTask -TaskName $Tarea -ErrorAction SilentlyContinue) {
     Stop-ScheduledTask -TaskName $Tarea -ErrorAction SilentlyContinue
   }
-  # Detener la tarea no siempre cierra los procesos hijos: cierra los del worker de esta carpeta.
+  # Detener la tarea no siempre cierra los procesos hijos: se cierran el .bat, "npm run worker" y el node del
+  # worker (su línea de comando no trae la carpeta, por eso se reconoce por "--no-warnings worker.js").
   Get-CimInstance Win32_Process |
     Where-Object { ($_.Name -in 'cmd.exe', 'node.exe') -and $_.CommandLine -and
-      ($_.CommandLine -like '*start-worker.bat*' -or ($_.CommandLine -like '*worker.js*' -and $_.CommandLine -like "*$Aqui*")) } |
+      ($_.CommandLine -like '*start-worker.bat*' -or $_.CommandLine -like '*--no-warnings worker.js*' -or $_.CommandLine -like '*run worker*') } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+  Start-Sleep -Seconds 1
 }
 
 if ($Quitar) {

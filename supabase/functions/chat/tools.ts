@@ -5,6 +5,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { fetchRates, RATE_CODE_MAP } from '../_shared/dolar.ts';
+import { calendarInsert, calendarList, docFromMarkdown, driveUpload, gmailSend, googleToken, sheetFromCsv } from '../_shared/google.ts';
 import { loadSection, type Section, SECTIONS } from './context.ts';
 
 export type Actions = {
@@ -245,6 +246,81 @@ export const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'crear_documento_drive',
+    description:
+      'Crea un archivo en el Google Drive de la persona, en su carpeta "DESJ" (solo si <google> dice conectado). tipo "documento": contenido en Markdown (títulos con #, listas con -, **negritas**) y queda como Google Doc. tipo "hoja": contenido en CSV con la primera fila de encabezados y queda como Google Sheet. Devuelve el enlace: compártelo.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: {
+        titulo: { type: 'string' },
+        tipo: { type: 'string', enum: ['documento', 'hoja'] },
+        contenido: { type: 'string' },
+      },
+      required: ['titulo', 'tipo', 'contenido'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'guardar_en_drive',
+    description: 'Sube a la carpeta "DESJ" del Google Drive de la persona archivos que mandó en ESTE mensaje (por su número: 1, 2…). Devuelve los enlaces.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: { archivos: { type: 'array', items: { type: 'integer' } } },
+      required: ['archivos'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'enviar_correo',
+    description:
+      'Envía un correo desde el Gmail de la persona. PRIMERO llámala con confirmado false: devuelve el borrador, muéstraselo completo (para, asunto, texto, adjuntos) y pregunta si lo envías. SOLO cuando la persona responda que sí en un mensaje posterior, llámala de nuevo igual con confirmado true. adjuntos: números de archivos de ESTE mensaje (lista vacía si no hay). para y cc: direcciones separadas por coma (cc puede ser cadena vacía).',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: {
+        para: { type: 'string' },
+        cc: { type: 'string' },
+        asunto: { type: 'string' },
+        cuerpo: { type: 'string', description: 'Texto plano del correo, con saludo y firma.' },
+        adjuntos: { type: 'array', items: { type: 'integer' } },
+        confirmado: { type: 'boolean' },
+      },
+      required: ['para', 'cc', 'asunto', 'cuerpo', 'adjuntos', 'confirmado'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'ver_google_calendar',
+    description: 'Lista los eventos del Google Calendar de la persona entre dos fechas (YYYY-MM-DD, ambas incluidas). Úsalo para "¿qué tengo el jueves?" o para no agendar encima de otra cosa.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: { desde: { type: 'string' }, hasta: { type: 'string' } },
+      required: ['desde', 'hasta'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'crear_evento_google',
+    description:
+      'Crea un evento en el Google Calendar de la persona (si <google> dice conectado; si no, usa crear_evento). inicio y fin en ISO 8601 con el desfase horario de la persona. Si no dice duración, 1 hora.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: {
+        titulo: { type: 'string' },
+        inicio: { type: 'string' },
+        fin: { type: 'string' },
+        ubicacion: { type: 'string' },
+        descripcion: { type: 'string' },
+      },
+      required: ['titulo', 'inicio', 'fin', 'ubicacion', 'descripcion'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'abrir_seccion',
     description:
       'Carga un área que no está en <secciones_cargadas>: salud (medicamentos, historial médico, contactos), finanzas (mes en curso, tasas, movimientos) o modulos (negocios y vehículos con su ficha, mantenimientos y papeles). Úsala solo si la necesitas para responder o para tener los ids de una herramienta.',
@@ -413,6 +489,43 @@ async function refreshRates(db: SupabaseClient, userId: string) {
   const { error } = await db.from('finance_rates').upsert(rows, { onConflict: 'user_id,code' });
   if (error) throw error;
   return Object.fromEntries(rows.map((r) => [r.code, r.per_usd]));
+}
+
+/** Archivos de este mensaje por número (1…N), sin tipo de documento. */
+function pickNumbered(raw: unknown, attachments: FileRef[]): FileRef[] {
+  return (Array.isArray(raw) ? raw : []).map((n) => {
+    const file = attachments[Number(n) - 1];
+    if (!file) throw new Error(attachments.length ? `el archivo ${n} no existe; este mensaje trae ${attachments.length}` : 'este mensaje no trae archivos');
+    return file;
+  });
+}
+
+/** Descarga un archivo de la carpeta de la persona en Storage. */
+async function downloadOwn(db: SupabaseClient, userId: string, path: string) {
+  if (!path.startsWith(`${userId}/`)) throw new Error('adjunto no válido');
+  const { data, error } = await db.storage.from('documentos').download(path);
+  if (error || !data) throw new Error('no encontré el archivo');
+  return new Uint8Array(await data.arrayBuffer());
+}
+
+async function timezoneOf(db: SupabaseClient, userId: string) {
+  const { data } = await db.from('profiles').select('timezone').eq('id', userId).maybeSingle();
+  return data?.timezone || 'America/Caracas';
+}
+
+const nextDay = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  const n = new Date(Date.UTC(y, m - 1, d + 1));
+  return n.toISOString().slice(0, 10);
+};
+
+/** Medianoche de esa fecha en la zona de la persona, en ISO con su desfase. */
+function zonedStart(iso: string, tz: string) {
+  const probe = new Date(`${iso}T12:00:00Z`);
+  const offset = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' })
+    .formatToParts(probe)
+    .find((p) => p.type === 'timeZoneName')?.value.replace('GMT', '') || '+00:00';
+  return `${iso}T00:00:00${offset === '' ? '+00:00' : offset}`;
 }
 
 /** Archivos elegidos por número (1…N) entre los adjuntos de este mensaje. Lanza Error si un número no existe. */
@@ -626,6 +739,71 @@ export async function runTool(
         .eq('user_id', ctx.userId);
       if (error) throw error;
       return count ? 'Anotado en el registro.' : 'No encontré ese registro.';
+    }
+    case 'crear_documento_drive': {
+      const title = str(input.titulo).slice(0, 200) || 'Documento de DESJ';
+      const content = str(input.contenido);
+      if (!content) throw new Error('contenido vacío');
+      const token = await googleToken(db, ctx.userId);
+      const file = input.tipo === 'hoja' ? await sheetFromCsv(token, title, content) : await docFromMarkdown(token, title, content);
+      return `Creado en Drive (carpeta DESJ): "${file.name}" → ${file.webViewLink}`;
+    }
+    case 'guardar_en_drive': {
+      const files = pickNumbered(input.archivos, ctx.attachments ?? []);
+      if (!files.length) throw new Error('indica qué archivos de este mensaje subir');
+      const token = await googleToken(db, ctx.userId);
+      const links: string[] = [];
+      for (const f of files) {
+        const bytes = await downloadOwn(db, ctx.userId, f.path);
+        const up = await driveUpload(token, { name: f.name, mime: f.mime, bytes });
+        links.push(`"${up.name}" → ${up.webViewLink}`);
+      }
+      return `Subido a Drive (carpeta DESJ): ${links.join(' · ')}`;
+    }
+    case 'enviar_correo': {
+      const to = str(input.para);
+      const cc = str(input.cc);
+      const subject = str(input.asunto);
+      const body = str(input.cuerpo);
+      const emails = [...to.split(','), ...(cc ? cc.split(',') : [])].map((e) => e.trim());
+      if (!to || emails.some((e) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))) throw new Error('alguna dirección de correo no es válida');
+      if (!subject || !body) throw new Error('falta el asunto o el texto');
+      const files = pickNumbered(input.adjuntos, ctx.attachments ?? []);
+      if (input.confirmado !== true) {
+        return `BORRADOR (todavía NO enviado). Muéstraselo y pregunta si lo envías:\nPara: ${to}${cc ? `\nCc: ${cc}` : ''}\nAsunto: ${subject}\n\n${body}${files.length ? `\n\nAdjuntos: ${files.map((f) => f.name).join(', ')}` : ''}`;
+      }
+      const token = await googleToken(db, ctx.userId);
+      const attachments = [];
+      for (const f of files) attachments.push({ name: f.name, mime: f.mime, bytes: await downloadOwn(db, ctx.userId, f.path) });
+      await gmailSend(token, { to, cc, subject, body, attachments });
+      return `Correo enviado a ${to}${cc ? ` (cc ${cc})` : ''}: "${subject}".`;
+    }
+    case 'ver_google_calendar': {
+      const from = str(input.desde);
+      const to = str(input.hasta);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new Error('desde y hasta van como YYYY-MM-DD');
+      const token = await googleToken(db, ctx.userId);
+      const tz = await timezoneOf(db, ctx.userId);
+      const events = await calendarList(token, zonedStart(from, tz), zonedStart(nextDay(to), tz));
+      if (!events.length) return `Nada en Google Calendar entre ${from} y ${to}.`;
+      return events
+        .map((e) => `- ${e.start?.dateTime ?? `${e.start?.date} (todo el día)`}${e.end?.dateTime ? ` a ${e.end.dateTime}` : ''}: ${e.summary ?? '(sin título)'}${e.location ? ` · ${e.location}` : ''}`)
+        .join('\n');
+    }
+    case 'crear_evento_google': {
+      const start = new Date(str(input.inicio));
+      const end = new Date(str(input.fin));
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) throw new Error('fechas inválidas');
+      const token = await googleToken(db, ctx.userId);
+      const ev = await calendarInsert(token, {
+        title: str(input.titulo),
+        start: str(input.inicio),
+        end: str(input.fin),
+        location: str(input.ubicacion),
+        description: str(input.descripcion),
+        timeZone: await timezoneOf(db, ctx.userId),
+      });
+      return `Evento creado en Google Calendar: "${ev.summary}"${ev.htmlLink ? ` → ${ev.htmlLink}` : ''}.`;
     }
     case 'abrir_seccion': {
       const section = str(input.seccion) as Section;

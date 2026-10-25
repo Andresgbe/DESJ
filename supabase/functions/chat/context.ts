@@ -42,7 +42,7 @@ type Opts = { message?: string; hasFiles?: boolean; mode?: 'chat' | 'conocimient
 // `agenda` la manda el teléfono (eventos de hoy de su calendario); null = sin acceso al calendario.
 export async function loadContext(db: SupabaseClient, userId: string, agenda: unknown, conversationId: string | null, opts: Opts = {}) {
   // 1) Lo de siempre: perfil, Conocimiento completo, memorias, pendientes, recordatorios, historial y los módulos.
-  const [profile, knowledge, memories, reminders, tasks, modules, history] = await Promise.all([
+  const [profile, knowledge, memories, reminders, tasks, modules, google, history] = await Promise.all([
     db.from('profiles').select('display_name, about, timezone').eq('id', userId).single(),
     db.from('knowledge').select('slug, title, content').eq('user_id', userId),
     db.from('memories').select('id, category, content, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(150),
@@ -56,6 +56,7 @@ export async function loadContext(db: SupabaseClient, userId: string, agenda: un
       .limit(20),
     db.from('tasks').select('id, title, due_date').eq('user_id', userId).eq('done', false).order('due_date', { ascending: true, nullsFirst: false }).limit(50),
     db.from('modules').select('id, kind, name').eq('user_id', userId).order('position').limit(50),
+    db.from('google_accounts').select('email, last_error').eq('user_id', userId).maybeSingle(),
     conversationId
       ? db.from('messages').select('role, content').eq('user_id', userId).eq('conversation_id', conversationId).eq('status', 'done').order('created_at', { ascending: false }).limit(HISTORY)
       : Promise.resolve({ data: [] as { role: string; content: string }[] }),
@@ -108,6 +109,7 @@ ${d.content.trim() || '[vacío: todavía no hay datos]'}
     ...(tasks.data ?? []).map((t) => `- [${t.id}] ${t.due_date ? `(${t.due_date}) ` : ''}${t.title}`),
     '</pendientes>',
     '',
+    `<google>${google.data ? `conectado como ${google.data.email ?? 'cuenta de Google'}${google.data.last_error ? ' (la última vez falló: puede que tenga que reconectar)' : ''}: puedes usar Drive, Gmail (enviar) y Google Calendar` : 'no conectado: Drive, Gmail y Google Calendar no están disponibles (se conecta en Ajustes → Cuenta de Google)'}</google>`,
     `<modulos_agregados>${(modules.data ?? []).map((m) => `${m.name} (${m.kind})`).join(', ') || 'ninguno'}</modulos_agregados>`,
     `<secciones_cargadas>${sections.join(', ') || 'ninguna'} (las demás: pídelas con abrir_seccion si las necesitas)</secciones_cargadas>`,
     '',

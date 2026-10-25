@@ -1,12 +1,17 @@
-// Pantalla · Ajustes (desde el menú de perfil): cuenta, permisos y versión.
+// Pantalla · Ajustes (desde el menú de perfil): cuenta, cuenta de Google (Drive, Gmail, Calendar), permisos y versión.
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 
+import { useFocusEffect } from 'expo-router';
+
+import { Btn } from '@/components/form';
 import { Card, Label, Row } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { calendarAvailable } from '@/lib/calendar';
+import { confirm, notify } from '@/lib/confirm';
+import { connectGoogle, googleAvailable, useGoogle } from '@/lib/google';
 import { askPermission } from '@/lib/notifications';
 import { cloudEnabled } from '@/lib/supabase';
 import { C } from '@/theme';
@@ -14,6 +19,20 @@ import { C } from '@/theme';
 export default function Ajustes() {
   const { session, name, signOut } = useAuth();
   const [notif, setNotif] = useState<boolean | null>(null);
+  const google = useGoogle();
+  const { reload: reloadGoogle } = google;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (session) void reloadGoogle();
+    }, [session, reloadGoogle]),
+  );
+
+  const disconnectGoogle = async () => {
+    if (!(await confirm('Desconectar Google', 'DESJ dejará de crear archivos en tu Drive, enviar correos y usar tu Google Calendar. Lo ya creado en Drive se queda.', 'Desconectar'))) return;
+    const res = await google.disconnect();
+    if (res.error) notify(res.error);
+  };
 
   useEffect(() => {
     Notifications.getPermissionsAsync().then((p) => setNotif(p.granted)).catch(() => setNotif(null));
@@ -34,6 +53,27 @@ export default function Ajustes() {
         <Item label="Datos" value={session ? 'En la nube (privados)' : cloudEnabled ? 'Sin sesión' : 'Solo en este teléfono (modo local)'} />
         {!cloudEnabled ? <Text style={styles.note}>La nube y el cerebro con Claude se activan cuando se configure Supabase.</Text> : null}
       </Card>
+
+      {session ? (
+        <Card>
+          <Label style={{ color: C.accentSoft }}>Cuenta de Google</Label>
+          <Text style={styles.note}>Para que DESJ cree documentos en tu Drive, envíe correos desde tu Gmail (siempre te muestra el borrador antes) y use tu Google Calendar.</Text>
+          {google.status ? (
+            <>
+              <Item label="Conectada" value={google.status.email ?? 'Sí'} />
+              {google.status.lastError ? <Text style={[styles.note, { color: C.warn }]}>Google rechazó el último acceso. Vuelve a conectar.</Text> : null}
+              <Row>
+                {google.status.lastError && googleAvailable ? <Btn label="Reconectar" onPress={connectGoogle} /> : null}
+                <Btn label="Desconectar" kind="danger" onPress={disconnectGoogle} />
+              </Row>
+            </>
+          ) : googleAvailable ? (
+            <Btn label="Conectar Google" onPress={connectGoogle} />
+          ) : (
+            <Text style={styles.note}>{google.ready ? 'Se conecta desde la versión web de DESJ (desj.expo.app).' : 'Cargando…'}</Text>
+          )}
+        </Card>
+      ) : null}
 
       <Card>
         <Label style={{ color: C.accentSoft }}>Permisos</Label>
