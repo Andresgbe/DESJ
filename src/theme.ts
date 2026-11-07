@@ -76,6 +76,9 @@ export const S = {
   touch: space('touch-min'),
   column: space('column-max'),
   columnWide: space('column-wide'),
+  columnDesk: space('column-desk'),
+  /** Ancho de ventana desde el que se usa el diseño de computadora (ver useLayout). */
+  breakpoint: space('breakpoint-wide'),
 };
 
 export const R = {

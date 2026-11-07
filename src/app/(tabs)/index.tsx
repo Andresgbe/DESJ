@@ -5,7 +5,7 @@ import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Keyboard, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { ChatHistory } from '@/components/chat-history';
@@ -16,6 +16,7 @@ import { IconCalendar } from '@/components/icons';
 import { Screen } from '@/components/ui';
 import { AgendaItem, getTodayAgenda } from '@/lib/calendar';
 import { useChats } from '@/lib/chats';
+import { useLayout } from '@/lib/layout';
 import { hhmm } from '@/lib/store';
 import { C, mono, S } from '@/theme';
 
@@ -42,10 +43,10 @@ export default function Nucleo() {
       return () => setFocused(false);
     }, []),
   );
-  const { width, height } = useWindowDimensions();
+  const { width, height, column: layoutColumn } = useLayout();
 
   // Solo DESJ: el cerebro tan grande como quepa. Conversando: hasta el 32 % del alto.
-  const column = Math.min(width - S.pad * 2, S.column - S.pad * 2);
+  const column = Math.min(width, layoutColumn) - S.pad * 2;
   const big = Math.round(Math.max(160, Math.min(column, (area || height * 0.7) - STATUS_HEIGHT - TALK_GAP - TALK_HEIGHT - 16)));
   const small = Math.round(Math.min(column, height * 0.32));
   const display = !talking ? big : typing ? 120 : small;

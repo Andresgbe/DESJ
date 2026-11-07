@@ -7,7 +7,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from "react-native";
 
@@ -15,6 +14,7 @@ import { IconChevron } from "@/components/icons";
 import { SUIT_RATIO, SuitCore } from "@/components/suit-core";
 import { Label, Screen, Title } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
+import { useLayout } from "@/lib/layout";
 import {
   ageFrom,
   firstName,
@@ -39,7 +39,7 @@ export default function Yo() {
   const knowledge = useKnowledge();
   const { docs } = knowledge;
   const { meds, taken } = useStore();
-  const { width, height } = useWindowDimensions();
+  const { width, height, column: layoutColumn } = useLayout();
 
   // La armadura se pausa cuando YO no está a la vista; los datos se releen al volver.
   const [focused, setFocused] = useState(true);
@@ -65,7 +65,7 @@ export default function Yo() {
   const { done: tomadas, total: dosis } = dosesToday(meds, taken);
 
   // La figura ocupa el centro entre las dos columnas de datos, sin pasar de la mitad del alto.
-  const column = Math.min(width, S.column) - S.pad * 2;
+  const column = Math.min(width, layoutColumn) - S.pad * 2;
   const figW = Math.min(column - STAT_W * 2 - S.gap * 2, 300);
   const figH = Math.round(Math.min(figW / SUIT_RATIO, height * 0.5));
 

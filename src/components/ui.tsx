@@ -8,6 +8,7 @@ import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg';
 import { IconBack } from '@/components/icons';
 import { NeuralBackground } from '@/components/neural-bg';
 import { ProfileButton } from '@/components/profile-menu';
+import { useLayout } from '@/lib/layout';
 import { useMotion } from '@/lib/motion';
 import { C, mono, S } from '@/theme';
 
@@ -15,18 +16,22 @@ import { C, mono, S } from '@/theme';
  * `menu`: botón extra en el header, a la izquierda del perfil (p. ej. el menú hamburguesa del Núcleo).
  * `back`: muestra la flecha para volver (pantallas dentro de un módulo, como YO → Salud).
  */
-export function Screen({ module, children, scroll = true, wide = false, menu, back = false }: { module: string; children: ReactNode; scroll?: boolean; wide?: boolean; menu?: ReactNode; back?: boolean }) {
+/** `overlay`: algo que flota sobre el contenido sin desplazarse con él (p. ej. el botón "+" del Calendario). */
+export function Screen({ module, children, scroll = true, wide = false, menu, back = false, overlay }: { module: string; children: ReactNode; scroll?: boolean; wide?: boolean; menu?: ReactNode; back?: boolean; overlay?: ReactNode }) {
+  // Teléfono: columna de S.column. Computadora (ventana ≥ S.breakpoint): columna más ancha, S.columnDesk.
+  const layout = useLayout();
+  const column = { maxWidth: wide ? S.columnWide : layout.column };
   const body = scroll ? (
-    <ScrollView contentContainerStyle={[styles.content, wide && styles.wide]} keyboardShouldPersistTaps="handled">
+    <ScrollView contentContainerStyle={[styles.content, column]} keyboardShouldPersistTaps="handled">
       {children}
     </ScrollView>
   ) : (
-    <View style={[styles.content, wide && styles.wide, { flex: 1, paddingBottom: 8 }]}>{children}</View>
+    <View style={[styles.content, column, { flex: 1, paddingBottom: 8 }]}>{children}</View>
   );
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <NeuralBackground />
-      <View style={[styles.header, wide && styles.wide]}>
+      <View style={[styles.header, column]}>
         {back ? (
           <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back} accessibilityRole="button" accessibilityLabel="Volver">
             <IconBack color={C.accentSoft} size={20} />
@@ -43,6 +48,7 @@ export function Screen({ module, children, scroll = true, wide = false, menu, ba
         </View>
       </View>
       {body}
+      {overlay}
     </SafeAreaView>
   );
 }
@@ -133,7 +139,8 @@ export function HudRing({ size = 210, big, small, progress }: { size?: number; b
 }
 
 // En pantallas anchas (web, iPad) el contenido no se estira: columna centrada.
-const WIDE = { width: '100%', maxWidth: 640, alignSelf: 'center' } as const;
+// El ancho máximo lo pone Screen según la ventana (useLayout).
+const WIDE = { width: '100%', maxWidth: S.column, alignSelf: 'center' } as const;
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
@@ -148,8 +155,6 @@ const styles = StyleSheet.create({
   },
   brand: { fontFamily: mono, fontSize: 12, letterSpacing: 3, color: C.accentSoft },
   content: { padding: S.pad, gap: S.gap, paddingBottom: 40, ...WIDE },
-  // Pantallas que aprovechan el ancho en computadora/iPad (p. ej. el calendario).
-  wide: { maxWidth: 1200 },
   title: { fontSize: 30, fontWeight: '800', color: C.text, letterSpacing: -0.5 },
   label: { fontFamily: mono, fontSize: 10.5, letterSpacing: 2, color: C.muted, textTransform: 'uppercase' },
   card: {
