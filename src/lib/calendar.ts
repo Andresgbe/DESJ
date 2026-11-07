@@ -43,7 +43,27 @@ export async function getEvents(start: Date, end: Date): Promise<AgendaItem[] | 
 
 // ---------------------------------------------------------------- Google Calendar
 
-type GoogleEvent = { id: string; title: string; start: string; end: string; allDay: boolean; location: string | null };
+/**
+ * Los 11 colores de evento de Google Calendar (colorId 1–11), con su nombre en español. Son datos del
+ * calendario (como los colores de categoría de Finanzas), no del tema. Sin colorId, el evento usa Pavo real.
+ */
+export const GOOGLE_COLORS: { id: string; name: string; hex: string }[] = [
+  { id: '11', name: 'Tomate', hex: '#d50000' },
+  { id: '4', name: 'Flamenco', hex: '#e67c73' },
+  { id: '6', name: 'Mandarina', hex: '#f4511e' },
+  { id: '5', name: 'Plátano', hex: '#f6bf26' },
+  { id: '2', name: 'Salvia', hex: '#33b679' },
+  { id: '10', name: 'Albahaca', hex: '#0b8043' },
+  { id: '7', name: 'Pavo real', hex: '#039be5' },
+  { id: '9', name: 'Arándano', hex: '#3f51b5' },
+  { id: '1', name: 'Lavanda', hex: '#7986cb' },
+  { id: '3', name: 'Uva', hex: '#8e24aa' },
+  { id: '8', name: 'Grafito', hex: '#616161' },
+];
+export const GOOGLE_DEFAULT_COLOR = '#039be5';
+const googleHex = (colorId: string | null) => GOOGLE_COLORS.find((c) => c.id === colorId)?.hex ?? GOOGLE_DEFAULT_COLOR;
+
+type GoogleEvent = { id: string; title: string; start: string; end: string; allDay: boolean; location: string | null; colorId: string | null };
 
 /** Fecha "YYYY-MM-DD" de un evento de todo el día → medianoche local (si no, se correría un día por la zona horaria). */
 const localDate = (v: string) => (/^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(`${v}T00:00:00`).toISOString() : v);
@@ -55,14 +75,14 @@ export async function getGoogleEvents(start: Date, end: Date): Promise<AgendaIte
   });
   if (error || !data?.events) return null;
   return data.events
-    .map((e) => ({ title: e.title, start: localDate(e.start), end: localDate(e.end), allDay: e.allDay, location: e.location, googleId: e.id }))
+    .map((e) => ({ title: e.title, start: localDate(e.start), end: localDate(e.end), allDay: e.allDay, location: e.location, googleId: e.id, color: googleHex(e.colorId) }))
     .sort((a, b) => Number(b.allDay) - Number(a.allDay) || a.start.localeCompare(b.start));
 }
 
 /** Crea un evento en Google Calendar. Devuelve false si no se pudo. */
-export async function createGoogleEvent(e: { title: string; start: Date; end: Date; location?: string; notes?: string }) {
+export async function createGoogleEvent(e: { title: string; start: Date; end: Date; location?: string; notes?: string; colorId?: string }) {
   const { error } = await supabase.functions.invoke('google-auth', {
-    body: { action: 'create', title: e.title, start: e.start.toISOString(), end: e.end.toISOString(), location: e.location ?? '', description: e.notes ?? '' },
+    body: { action: 'create', title: e.title, start: e.start.toISOString(), end: e.end.toISOString(), location: e.location ?? '', description: e.notes ?? '', colorId: e.colorId ?? null },
   });
   return !error;
 }

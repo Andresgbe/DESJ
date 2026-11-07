@@ -4,6 +4,7 @@ import { Stack } from 'expo-router/stack';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { Login } from '@/components/login';
 import { AuthProvider, useAuth } from '@/lib/auth';
@@ -19,14 +20,17 @@ const theme = { ...DarkTheme, colors: { ...DarkTheme.colors, background: C.bg, c
 
 export default function RootLayout() {
   return (
-    <MotionProvider>
-      <AuthProvider>
-        <ThemeProvider value={theme}>
-          <StatusBar style="light" />
-          <Gate />
-        </ThemeProvider>
-      </AuthProvider>
-    </MotionProvider>
+    // Raíz de gestos: arrastrar para ordenar (links de Universidad).
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: C.bg }}>
+      <MotionProvider>
+        <AuthProvider>
+          <ThemeProvider value={theme}>
+            <StatusBar style="light" />
+            <Gate />
+          </ThemeProvider>
+        </AuthProvider>
+      </MotionProvider>
+    </GestureHandlerRootView>
   );
 }
 

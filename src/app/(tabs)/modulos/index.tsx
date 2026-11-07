@@ -24,11 +24,19 @@ export default function Modulos() {
   );
 
   const open = (m: Module) =>
-    m.kind === 'negocios' ? router.push('/modulos/negocios') : m.kind === 'nomore' ? router.push('/modulos/nomore') : m.kind === 'tobuy' ? router.push('/modulos/tobuy') : router.push({ pathname: '/modulos/[id]', params: { id: m.id } });
+    m.kind === 'negocios' ? router.push('/modulos/negocios') : m.kind === 'nomore' ? router.push('/modulos/nomore') : m.kind === 'tobuy' ? router.push('/modulos/tobuy') : m.kind === 'universidad' ? router.push('/modulos/universidad') : m.kind === 'horarios' ? router.push('/modulos/horarios') : m.kind === 'goals' ? router.push('/modulos/goals') : router.push({ pathname: '/modulos/[id]', params: { id: m.id } });
 
   const remove = async (m: Module) => {
     const extra =
-      m.kind === 'vehiculo' ? ' Se borran también su ficha, mantenimientos y papeles.' : m.kind === 'nomore' ? ' Se borran también tu PIN, tus contadores y su historial.' : m.kind === 'tobuy' ? ' Se borra también toda la lista y sus categorías.' : '';
+      m.kind === 'vehiculo' ? ' Se borran también su ficha, mantenimientos y papeles.' : m.kind === 'nomore' ? ' Se borran también tu PIN, tus contadores y su historial.' : m.kind === 'tobuy'
+          ? ' Se borra también toda la lista y sus categorías.'
+          : m.kind === 'universidad'
+            ? ' Se borran también tus materias, notas, clases y links.'
+            : m.kind === 'horarios'
+              ? ' Se borran también todos los horarios.'
+              : m.kind === 'goals'
+                ? ' Se borran también todas tus metas y sus pasos.'
+                : '';
     if (await confirm('Quitar módulo', `¿Quitar "${m.name}"?${extra} No se puede deshacer.`, 'Quitar')) void removeModule(m.id);
   };
 
@@ -102,6 +110,9 @@ export default function Modulos() {
             if (kind === 'vehiculo') router.push({ pathname: '/modulos/[id]', params: { id } });
             if (kind === 'nomore') router.push('/modulos/nomore');
             if (kind === 'tobuy') router.push('/modulos/tobuy');
+            if (kind === 'universidad') router.push('/modulos/universidad');
+            if (kind === 'horarios') router.push('/modulos/horarios');
+            if (kind === 'goals') router.push('/modulos/goals');
           }}
         />
       ) : (

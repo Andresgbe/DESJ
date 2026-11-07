@@ -126,6 +126,8 @@ Deno.serve(async (req) => {
           location: String(body.location ?? ''),
           description: String(body.description ?? ''),
           timeZone: profile?.timezone || 'America/Caracas',
+          // Color de Google Calendar (1–11); cualquier otra cosa se ignora.
+          colorId: /^(?:[1-9]|1[01])$/.test(String(body.colorId ?? '')) ? String(body.colorId) : null,
         });
         return json({ id: ev.id ?? null });
       }

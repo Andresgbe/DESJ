@@ -33,11 +33,14 @@ export default function VehicleScreen() {
     }, [reloadModules, reload]),
   );
 
-  // Negocios, NO MORE y TO BUY tienen su propia pantalla.
+  // Negocios, NO MORE, TO BUY, Universidad, Horarios y Goals tienen su propia pantalla.
   useEffect(() => {
     if (mod?.kind === 'negocios') router.replace('/modulos/negocios');
     if (mod?.kind === 'nomore') router.replace('/modulos/nomore');
     if (mod?.kind === 'tobuy') router.replace('/modulos/tobuy');
+    if (mod?.kind === 'universidad') router.replace('/modulos/universidad');
+    if (mod?.kind === 'horarios') router.replace('/modulos/horarios');
+    if (mod?.kind === 'goals') router.replace('/modulos/goals');
   }, [mod?.kind]);
 
   if (!mod) {

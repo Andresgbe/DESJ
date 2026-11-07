@@ -170,6 +170,32 @@ export const IconCart = ({ color, size = 22 }: P) => (
   </Svg>
 );
 
+// Módulo Universidad: birrete.
+export const IconCap = ({ color, size = 22 }: P) => (
+  <Svg {...base(size, color)}>
+    <Path d="M2 9l10-5 10 5-10 5z" />
+    <Path d="M6 11v5c0 1.5 3 3 6 3s6-1.5 6-3v-5" />
+    <Path d="M22 9v6" />
+  </Svg>
+);
+
+// Módulo Horarios: reloj.
+export const IconClock = ({ color, size = 22 }: P) => (
+  <Svg {...base(size, color)}>
+    <Circle cx={12} cy={12} r={9} />
+    <Path d="M12 7v5l3 2" />
+  </Svg>
+);
+
+// Módulo Goals: diana.
+export const IconTarget = ({ color, size = 22 }: P) => (
+  <Svg {...base(size, color)}>
+    <Circle cx={12} cy={12} r={9} />
+    <Circle cx={12} cy={12} r={5} />
+    <Circle cx={12} cy={12} r={1.2} />
+  </Svg>
+);
+
 // Candado (PIN).
 export const IconLock = ({ color, size = 18 }: P) => (
   <Svg {...base(size, color)}>

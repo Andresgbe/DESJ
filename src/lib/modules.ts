@@ -1,7 +1,8 @@
 // Módulos (pestaña MÓDULOS): cada persona agrega, quita y ordena módulos de un CATÁLOGO cerrado. Cada tipo
 // tiene su propia vista y sus datos: hoy Negocios (uno por persona), Vehículo (uno por carro o moto, con su
 // ficha, mantenimientos y papeles en lib/vehicles.ts) NO MORE (uno por persona, con PIN; lib/nomore.ts)
-// y TO BUY (lista de compras con categorías; lib/tobuy.ts).
+// TO BUY (lista de compras con categorías; lib/tobuy.ts), Universidad (lib/university.ts), Horarios
+// (lib/schedules.ts) y Goals (lib/goals.ts).
 // - Con sesión: viven en Supabase (privados por usuario). DESJ los ve desde el chat.
 // - Sin nube: viven en el teléfono; la primera vez se arranca con Negocios.
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,7 +11,7 @@ import { useCallback, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 
-export type ModuleKind = 'negocios' | 'vehiculo' | 'nomore' | 'tobuy';
+export type ModuleKind = 'negocios' | 'vehiculo' | 'nomore' | 'tobuy' | 'universidad' | 'horarios' | 'goals';
 
 /** El catálogo: lo que se puede agregar. `multiple`: se puede tener más de uno (un vehículo por carro). */
 export const CATALOG: { kind: ModuleKind; label: string; description: string; multiple: boolean }[] = [
@@ -31,6 +32,24 @@ export const CATALOG: { kind: ModuleKind; label: string; description: string; mu
     kind: 'tobuy',
     label: 'To buy',
     description: 'Lista de compras por categorías: marcas lo que compraste y queda en Completado.',
+    multiple: false,
+  },
+  {
+    kind: 'universidad',
+    label: 'Universidad',
+    description: 'Tus materias con su plan de evaluación y notas, lo visto en cada clase (15 semanas) y links rápidos.',
+    multiple: false,
+  },
+  {
+    kind: 'horarios',
+    label: 'Horarios',
+    description: 'Tu horario y el de tus amigos, para ver quién te puede dar la cola cada día.',
+    multiple: false,
+  },
+  {
+    kind: 'goals',
+    label: 'Goals',
+    description: 'Tus metas a corto, mediano y largo plazo por categoría (finanzas, universidad, escritura…), con fecha, avance y pasos.',
     multiple: false,
   },
 ];
@@ -116,7 +135,7 @@ export function useModules() {
       await supabase.from('modules').delete().eq('id', id);
     } else {
       await writeLocal(next);
-      await AsyncStorage.multiRemove([`desj:vehicle:${id}`, `desj:nomore:${id}`, `desj:tobuy:${id}`]);
+      await AsyncStorage.multiRemove([`desj:vehicle:${id}`, `desj:nomore:${id}`, `desj:tobuy:${id}`, `desj:university:${id}`, `desj:horarios:${id}`, `desj:goals:${id}`]);
     }
   };
 

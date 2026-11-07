@@ -211,7 +211,7 @@ export async function calendarDelete(token: string, id: string) {
   if (!res.ok && res.status !== 410) throw new Error(`Google respondió ${res.status} al borrar el evento.`);
 }
 
-export async function calendarInsert(token: string, ev: { title: string; start: string; end: string; location: string; description: string; timeZone: string }) {
+export async function calendarInsert(token: string, ev: { title: string; start: string; end: string; location: string; description: string; timeZone: string; colorId?: string | null }) {
   return call<GEvent>(token, 'https://www.googleapis.com/calendar/v3/calendars/primary/events', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -219,6 +219,7 @@ export async function calendarInsert(token: string, ev: { title: string; start: 
       summary: ev.title,
       location: ev.location || undefined,
       description: ev.description || undefined,
+      colorId: ev.colorId || undefined,
       start: { dateTime: ev.start, timeZone: ev.timeZone },
       end: { dateTime: ev.end, timeZone: ev.timeZone },
     }),

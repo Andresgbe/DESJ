@@ -73,7 +73,7 @@ Encuesta: propósito = *ahorrar tiempo en tareas repetitivas*; tipo = *app o pla
 | Núcleo | Saludo, resumen del día, accesos rápidos | 0 ✅ |
 | Chat + voz | Hablar/escribir con DESJ; responde en texto y voz | 0 (demo) → 1 (Claude) |
 | Recordatorios / rutinas | Avisos a su hora; resumen diario 07:40 | 0 ✅ (locales) |
-| Calendario | Vistas Mes, Semana y Día (grilla por horas como Google Calendar): Google Calendar si está conectado (si no, el calendario del teléfono), recordatorios de DESJ y pastillas | 1 ✅ (calendario del teléfono requiere development build) |
+| Calendario | Estilo Google Calendar: vistas Agenda, Día, 3 días, Semana y Mes con eventos en los 11 colores de Google, detalle al tocar y botón "+" para crear (con color). Google Calendar si está conectado (si no, el del teléfono), recordatorios de DESJ y pastillas | 1 ✅ (calendario del teléfono requiere development build) |
 | Conocimiento | Archivos Markdown por usuario (perfil, salud, negocios, preferencias) que DESJ lee siempre; entrevista para llenarlos | 1 ✅ (guiada sin nube; con Claude al conectar) |
 | Pendientes | Lista de tareas por usuario (reemplaza la pestaña Rutinas) | 1 ✅ |
 | Historial de chats | Varias conversaciones por usuario; la memoria es común a todas | 1 ✅ |
@@ -121,7 +121,7 @@ src/
     _layout.tsx            ← raíz: sesión, datos, pila (Stack) con las pestañas y las pantallas del menú de perfil
     (tabs)/_layout.tsx     ← 5 pestañas: Núcleo, Calendario, YO, Módulos, Pendientes
     (tabs)/index.tsx       ← Núcleo: al entrar solo el cerebro grande + botón "Hablar con DESJ"; al tocarlo el cerebro se achica y aparece el chat, estado del día y el chat con DESJ (con historial)
-    (tabs)/calendario.tsx  ← Mes / Semana / Día (grilla de horas, tocar una hora abre Agregar): Google Calendar o el del teléfono, recordatorios de DESJ y pastillas
+    (tabs)/calendario.tsx  ← estilo Google Calendar: Agenda / Día / 3 días / Semana / Mes, detalle del evento, "+" flotante (Screen overlay) para crear con color
     (tabs)/yo/index.tsx    ← módulo YO: armadura holográfica que gira + altura, peso, IMC, edad, sangre, pastillas; entrada a los módulos personales
     (tabs)/yo/salud.tsx    ← YO · Salud: pestañas Pastillas (dosis múltiples, horas opcionales, recordatorios), Historial (año → mes → día) y Contactos
     (tabs)/yo/examen/[id].tsx ← detalle de un registro del historial: datos, archivos por tipo con vista previa y descarga, editar, borrar
@@ -162,6 +162,7 @@ src/
     finance.ts             ← Finanzas: conversión a dólar BCV, totales, datos (local o Supabase) · dolar-api.ts ← tasas de hoy: Edge Function `tasas` (DolarAPI + USDT de Binance P2P, como cc-sacramento; código en supabase/functions/_shared/dolar.ts) o DolarAPI directo sin sesión
     reminders.ts           ← registro de recordatorios de DESJ (notificaciones locales)
     brain.ts               ← askDesj() (Edge Function) y think() (reglas, modo demo)
+    layout.ts              ← useLayout(): teléfono o computadora según el ancho de la ventana
     calendar.ts, notifications.ts, supabase.ts, auth.tsx, confirm.ts
   theme.ts                 ← C, S, R: se arman desde design/tokens.json
 design/
@@ -197,6 +198,8 @@ Inspirada en el carrusel de Adrián y en los grafos tipo "Jarvis": fondo casi ne
 **Núcleo (18 oct 2026):** sin saludo ni fecha. Al entrar solo se ve DESJ grande y centrado con el botón **HABLAR CON DESJ**; al tocarlo el cerebro se achica y sube (450 ms) y aparece la conversación. Historial, conversación nueva, voz y "Volver a DESJ" están en el menú hamburguesa del header.
 
 **Módulo YO (18 oct 2026):** la pestaña Salud se reemplazó por **YO**. Muestra una armadura holográfica genérica que gira (inspirada en la referencia; no es el modelo de Iron Man, que es de Marvel) con tus datos a los lados, leídos de perfil.md y salud.md con el formato `- **Campo:** valor` (Talla, Peso, Tipo de sangre, Fecha de nacimiento o Edad). Adentro viven los módulos personales: Salud, Plan físico y Tus datos.
+
+**Teléfono y computadora (7 nov 2026):** la web y el iPhone son el mismo código (React Native Web). El diseño cambia según el **ancho de la ventana**, no según la plataforma, para que la web abierta en el teléfono se vea como el teléfono: `useLayout()` (`src/lib/layout.ts`) devuelve `wide` cuando la ventana mide ≥ `breakpoint-wide` (900 px) y la columna máxima (`column-max` 640 px en teléfono, `column-desk` 960 px en computadora). `Screen` la aplica sola; el Núcleo y YO la usan para el tamaño del cerebro y de la armadura. Para que algo cambie solo en computadora: `const { wide } = useLayout()` y `style={[styles.x, wide && styles.xAncho]}`. El Calendario conserva su propio corte de 700 px para las celdas del mes.
 
 **Google: Drive, Gmail y Calendar (25 oct 2026):** cada persona conecta su cuenta en Ajustes → Cuenta de Google (solo en la versión web por ahora). OAuth con el proyecto de Google Cloud "DESJ" (publicado sin verificar: al conectar sale "Google no verificó esta app" → Avanzado → Ir a DESJ; sirve hasta 100 usuarios). Permisos mínimos: `drive.file` (solo lo que crea DESJ, en la carpeta "DESJ"), `gmail.send` (no lee correo), `calendar.events`, `userinfo.email`. Flujo: la app abre Google → vuelve a la Edge Function `google-auth` (sin verify_jwt; URI registrada) → reenvía a `/google` de la app → `google-auth` cambia el código y guarda el acceso en `google_accounts` (RLS, con la sesión de la persona). Herramientas: `crear_documento_drive` (Markdown → Doc, CSV → Sheet), `guardar_en_drive`, `enviar_correo` (siempre borrador primero y confirmación), `ver_google_calendar`, `crear_evento_google`. Secretos: `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` en Supabase y en `desj-worker/.env`. Política de privacidad pública: https://desj.expo.app/privacidad (`public/privacidad.html`).
 
@@ -310,3 +313,29 @@ npm run deploy:web         # exporta a dist/ y publica en producción (EAS Hosti
 **Calendario Semana/Día y archivos en mosaico (25 oct 2026):** la pestaña Calendario tiene vistas Mes, Semana y Día; en Semana y Día los eventos se ubican por hora (los que se pisan van en columnas), los de todo el día arriba, y una línea marca la hora actual. Tocar un espacio vacío abre Agregar con esa hora; tocar el día en la cabecera abre la vista Día. En Salud, los archivos de un registro se ven como mosaicos pequeños (2 por fila en el teléfono, 3 o 4 en pantallas anchas); la foto en grande solo se abre con "Ampliar" (visor dentro de la app; los PDF se abren en el visor del teléfono o del navegador).
 
 **Finanzas más legible (25 oct 2026):** la sección (Ingresos y gastos / Deudas / Presupuesto) se elige en una lista plegable. Ingresos y Gastos van en una fila y el Balance del mes en otra. El desglose por categoría y los movimientos son plegables y muestran 5; el resto con "Ver N más", que siempre empieza cerrado. La gráfica se dibuja aunque el mes esté vacío (todo en cero) y, al cambiar de mes, la vista se vacía enseguida y descarta las respuestas tardías (`loadMonth`).
+
+**Módulos NO MORE y TO BUY (25 oct 2026):** el catálogo de Módulos ahora tiene cuatro tipos: Negocios, Vehículo, No more y To buy (los dos nuevos, uno por persona).
+- **No more** (`/modulos/nomore`, `lib/nomore.ts`, `lib/nomore-content.ts`, `components/nomore.tsx`, migración `20261026000000_nomore`): contadores de días sin lo que la persona está dejando (varios a la vez), con reloj en vivo, próxima meta (1, 3, 7, 14, 21, 30, 60, 90, 180, 365 días y luego cada año), mejor racha, "Perdí la racha" (guarda cuánto duró y una nota en `nomore_resets`) e historial. También tiene un mensaje de aliento por día, otro mensaje al perder la racha y versículos Reina-Valera 1960 con "Otro versículo". Pide un PIN de 4 dígitos cada vez que se entra y se bloquea al salir de la pantalla. El PIN se guarda como SHA-256 de "sal:pin" (`expo-crypto`) y tras 5 intentos fallidos hay que esperar 30 s. Si se olvida, con sesión se recupera con la contraseña de la cuenta. DESJ no lee estos datos (el prompt lo dice).
+- **To buy** (`/modulos/tobuy`, `lib/tobuy.ts`, migración `20261026010000_tobuy`): lista de compras con categorías (se siembran Supermercado, Farmacia y Hogar; se agregan, renombran, cambian de color y borran) y filtro por categoría. Solo se ven las pendientes, agrupadas por categoría; lo marcado pasa a "Completado", que está plegado. DESJ todavía no lee ni edita la lista.
+
+**Calendario estilo Google (26 oct 2026):** se rehízo para parecerse a Google Calendar.
+- Vistas Agenda, Día, 3 días, Semana y Mes; la elegida se recuerda en el dispositivo (`desj:calendar:view`).
+- Los eventos van en bloques de color sólido. Para Google se usan sus 11 colores de evento (`GOOGLE_COLORS` en `lib/calendar.ts`, según el `colorId`; sin color, Pavo real). Los recordatorios de DESJ van en ámbar (`C.warn`). El texto sobre cada color se elige claro u oscuro según la luminancia.
+- Tocar un evento abre su detalle (fecha, hora, lugar, origen y Borrar).
+- El botón flotante "+" (`Screen overlay`) abre Crear: título, Evento o Recordatorio, fecha, desde/hasta y color. El color llega a Google como `colorId` por `google-auth` → `calendarInsert`.
+- En Mes, tocar un día lo elige y el día elegido se ve abajo como en la Agenda; tocarlo otra vez abre la vista Día.
+
+**Módulos UNIVERSIDAD y HORARIOS (26 oct 2026):** dos tipos más en el catálogo, uno de cada uno por persona (migración `20261026020000_universidad_horarios`). Los dos usan `lib/module-db.ts` (`useModuleDb`): un hook genérico para módulos sencillos que maneja las tablas en Supabase o en el teléfono (`desj:<key>:<módulo>`), con insert, update y remove. En local las hijas se borran a mano.
+- **Universidad** (`/modulos/universidad`, `/modulos/materia/[id]`, `lib/university.ts`, `components/university.tsx`): materias (nombre, profesor y color) y plan de evaluación (evaluación, %, nota sobre 20 u otro máximo, fecha). Muestra el acumulado sobre 20, el % evaluado y el promedio que falta para llegar a 10, y avisa si el plan no suma 100%. Las 15 semanas de clases son plegables ("Semana 5 · MAR · Integrales por partes"). Los links rápidos llevan el logo del sitio (favicon por el servicio público de Google, que solo recibe el dominio; si falla, sale la inicial) y pueden ser del módulo o de una materia.
+- **Horarios** (`/modulos/horarios`, `lib/schedules.ts`): personas ("Yo" se crea solo, más los amigos, con color y teléfono para WhatsApp) y sus bloques semanales (día, entra, sale, materia). Por día muestra "¿Quién te da la cola?": para ir, amigos que llegan hasta 90 min antes que tú (o 15 min después); para volver, amigos que salen hasta 90 min después (o 15 min antes). Debajo, una línea de tiempo de 6:00 a 22:00 por persona.
+- DESJ todavía no lee estos módulos (lo dice el prompt).
+
+**Links de Universidad: ordenar y borrar (26 oct 2026):** mantener presionado un link entra en modo edición (como en el iPhone): se arrastra para cambiarlo de orden (`react-native-gesture-handler` Pan con `activateAfterLongPress`, más Reanimated) y la ✕ lo borra; un toque corto lo abre. Los mosaicos van posicionados en absoluto y siempre en el mismo orden en la vista: si se reordenaran los nodos durante el arrastre, en la web el gesto se cancela. El logo y el texto no reciben el puntero, porque si no el navegador arrastra la imagen y corta el gesto. El orden se guarda en lote (`updateMany` de `module-db`). La app ahora está envuelta en `GestureHandlerRootView` (`_layout.tsx`).
+
+**Módulo GOALS (26 oct 2026):** uno por persona (`/modulos/goals`, `lib/goals.ts`, migración `20261026030000_goals`, con `module-db`).
+- Metas con plazo corto (este año), mediano (1 a 3 años) o largo (3 años o más) y categoría editable. Se siembran Finanzas, Universidad, Personal, Escritura y Salud.
+- Cada meta tiene fecha opcional ("faltan 3 meses"), descripción y pasos marcables.
+- El progreso sale de lo que se lleva sobre la meta numérica (`target_amount`/`current_amount`, "$1.200 de $5.000"); si no hay número, de los pasos hechos; si tampoco hay pasos, del porcentaje a mano (0, 25, 50, 75 o 100 %).
+- Las pestañas son Corto, Mediano, Largo y Logrados (`done_at`), y se puede filtrar por categoría.
+- DESJ todavía no lee las metas (lo dice el prompt).
+
