@@ -22,12 +22,15 @@ type Actions = {
 
 type ChatReply = { reply: string; conversation_id: string | null; title: string | null; actions: Actions };
 
-type AskResult = { reply: string; dataChanged: boolean; knowledgeChanged: boolean; conversationId: string | null; failed: boolean };
+/** `queued`: el worker no lo tomó a tiempo y el mensaje quedó esperando en la cola. */
+type AskResult = { reply: string; dataChanged: boolean; knowledgeChanged: boolean; conversationId: string | null; failed: boolean; queued?: boolean };
 type Mode = 'chat' | 'conocimiento';
 
 const QUEUE_POLL_MS = 1500;
 const QUEUE_OFFLINE_MS = 25_000; // si nadie toma el mensaje en este tiempo, el worker está apagado
 const QUEUE_TIMEOUT_MS = 200_000;
+const RETRY_PER_MESSAGE_MS = 200_000; // tiempo máximo que se espera cada mensaje al reintentar
+const RETRY_LIMIT = 50; // por toque de "Reintentar"; si hay más, el botón sigue a la vista para el resto
 
 /** Envía el mensaje a DESJ (con la agenda de hoy) y ejecuta en el teléfono lo que haya decidido. */
 export async function askDesj(text: string, conversationId: string | null, mode: Mode = 'chat', attachments: Uploaded[] = []): Promise<AskResult> {
@@ -73,7 +76,7 @@ async function askQueue(text: string, conversationId: string | null, mode: Mode,
     const title = clean.length > 60 ? `${clean.slice(0, 57).trimEnd()}…` : clean;
     const { data, error } = await supabase.from('conversations').insert({ title, kind: mode }).select('id').single();
     if (error || !data) return failure('No pude conectarme. Revisa tu internet e intenta de nuevo.', null);
-    convId = data.id;
+    convId = data.id as string;
   }
 
   const { data: mine, error } = await supabase
@@ -94,6 +97,7 @@ async function askQueue(text: string, conversationId: string | null, mode: Mode,
     .single();
   if (error || !mine) return failure('No pude enviar tu mensaje. Revisa tu internet e intenta de nuevo.', convId);
 
+  const conv = convId;
   const started = Date.now();
   while (Date.now() - started < QUEUE_TIMEOUT_MS) {
     await new Promise((r) => setTimeout(r, QUEUE_POLL_MS));
@@ -101,30 +105,123 @@ async function askQueue(text: string, conversationId: string | null, mode: Mode,
     if (!row) continue;
     if (row.status === 'error') return failure(row.error ?? 'DESJ no pudo responder.', convId);
     if (row.status === 'done') {
-      const { data: answer } = await supabase
-        .from('messages')
-        .select('content, actions')
-        .eq('conversation_id', convId)
-        .eq('role', 'assistant')
-        .gt('created_at', mine.created_at)
-        .order('created_at')
-        .limit(1)
-        .single();
+      const answer = await findAnswer(mine.id, conv, mine.created_at);
       if (!answer) return failure('DESJ respondió pero no pude leer la respuesta. Abre la conversación de nuevo.', convId);
       const done = await runActions(answer.content, (answer.actions as Actions | null) ?? null);
       return { ...done, conversationId: convId, failed: false };
     }
     if (row.status === 'pending' && Date.now() - started > QUEUE_OFFLINE_MS) {
       return {
-        reply: 'DESJ está desconectado en este momento (el computador que lo atiende está apagado). Tu mensaje quedó en cola y te respondo apenas vuelva.',
+        reply: 'DESJ está desconectado en este momento (el computador que lo atiende está apagado). Tu mensaje quedó en cola: toca "Reintentar conexión" cuando vuelva.',
         dataChanged: false,
         knowledgeChanged: false,
         conversationId: convId,
         failed: false,
+        queued: true,
       };
     }
   }
   return { reply: 'DESJ está tardando más de lo normal. La respuesta aparecerá en esta conversación cuando esté lista.', dataChanged: false, knowledgeChanged: false, conversationId: convId, failed: false };
+}
+
+/** La respuesta del worker a un mensaje: la que lo cita en `context.reply_to` o, si es de un worker viejo, la siguiente de la conversación. */
+async function findAnswer(messageId: string, convId: string, after: string) {
+  const { data: linked } = await supabase
+    .from('messages')
+    .select('content, actions')
+    .eq('conversation_id', convId)
+    .eq('role', 'assistant')
+    .eq('context->>reply_to', messageId)
+    .limit(1)
+    .maybeSingle();
+  if (linked) return linked;
+  const { data } = await supabase
+    .from('messages')
+    .select('content, actions')
+    .eq('conversation_id', convId)
+    .eq('role', 'assistant')
+    .gt('created_at', after)
+    .order('created_at')
+    .limit(1)
+    .maybeSingle();
+  return data;
+}
+
+/** Filtro de los mensajes tuyos que el worker no respondió: siguen en cola o fallaron (los mismos que la app marca "En cola" / "Sin respuesta"). */
+const unansweredFilter = () => 'status.in.(pending,error)';
+
+/** Cuántos mensajes tuyos esperan respuesta del worker (null sin sesión o sin conexión). */
+export async function countUnanswered(): Promise<number | null> {
+  const { count, error } = await supabase.from('messages').select('id', { count: 'exact', head: true }).eq('role', 'user').or(unansweredFilter());
+  return error ? null : (count ?? 0);
+}
+
+/** `reason`: por qué falló el último mensaje que no se pudo responder (lo escribe el worker). */
+export type RetryProgress = { total: number; answered: number; failed: number; conversationIds: string[]; reason?: string };
+/** `online`: el worker tomó al menos un mensaje. `dataChanged`: alguna respuesta cambió pastillas o tomas. */
+export type RetryResult = RetryProgress & { online: boolean; dataChanged?: boolean; error?: string };
+
+/**
+ * "Reintentar conexión": vuelve a poner en la cola los mensajes que quedaron sin respuesta (con la agenda de hoy),
+ * espera a que el worker los tome y ejecuta en el teléfono lo que decida en cada respuesta.
+ * Si nadie los toma en ~25 s, el computador sigue apagado y los mensajes se quedan en la cola.
+ */
+export async function retryQueue(onProgress?: (p: RetryProgress) => void): Promise<RetryResult> {
+  const empty = { total: 0, answered: 0, failed: 0, conversationIds: [] };
+  const { data: rows, error } = await supabase
+    .from('messages')
+    .select('id, conversation_id, created_at, context')
+    .eq('role', 'user')
+    .or(unansweredFilter())
+    .order('created_at')
+    .limit(RETRY_LIMIT);
+  if (error) return { ...empty, online: false, error: 'No pude conectarme. Revisa tu internet e intenta de nuevo.' };
+  if (!rows?.length) return { ...empty, online: true };
+
+  const agenda = await getTodayAgenda().catch(() => null);
+  const retriedAt = new Date().toISOString();
+  for (const r of rows) {
+    const context = r.context && typeof r.context === 'object' ? (r.context as Record<string, unknown>) : {};
+    // `retried_at` le dice al worker que el mensaje no está vencido aunque se haya escrito hace horas.
+    await supabase
+      .from('messages')
+      .update({ status: 'pending', error: null, context: { ...context, agenda: agenda ?? context.agenda ?? null, retried_at: retriedAt } })
+      .eq('id', r.id)
+      .in('status', ['pending', 'error']);
+  }
+
+  const progress: RetryProgress = { total: rows.length, answered: 0, failed: 0, conversationIds: [] };
+  const open = new Map(rows.map((r) => [r.id, r]));
+  const started = Date.now();
+  let lastMove = started;
+  let online = false;
+  let dataChanged = false;
+
+  while (open.size && Date.now() - lastMove < (online ? RETRY_PER_MESSAGE_MS : QUEUE_OFFLINE_MS)) {
+    await new Promise((r) => setTimeout(r, QUEUE_POLL_MS));
+    const { data: states } = await supabase.from('messages').select('id, status, error').in('id', [...open.keys()]);
+    for (const s of states ?? []) {
+      if (s.status === 'pending') continue;
+      if (!online) lastMove = Date.now();
+      online = true;
+      if (s.status === 'running') continue;
+      const row = open.get(s.id);
+      if (!row) continue;
+      open.delete(s.id);
+      lastMove = Date.now();
+      if (s.status === 'done') {
+        progress.answered += 1;
+        const answer = await findAnswer(row.id, row.conversation_id, row.created_at);
+        if (answer) dataChanged = (await runActions(answer.content, (answer.actions as Actions | null) ?? null)).dataChanged || dataChanged;
+      } else {
+        progress.failed += 1;
+        if (s.error) progress.reason = s.error;
+      }
+      if (!progress.conversationIds.includes(row.conversation_id)) progress.conversationIds.push(row.conversation_id);
+      onProgress?.({ ...progress, conversationIds: [...progress.conversationIds] });
+    }
+  }
+  return { ...progress, online, dataChanged };
 }
 
 /** Ejecuta en el teléfono lo que DESJ decidió: avisos locales y eventos del calendario. */

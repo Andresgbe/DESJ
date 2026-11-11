@@ -14,6 +14,7 @@
 //
 // Uso:  npm run worker   (desde desj-worker/; o start-worker.bat para dejarlo corriendo)
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -32,12 +33,21 @@ const POLL_MS = Number(process.env.DESJ_WORKER_POLL_MS || 2500);
 const TIMEOUT_MS = Number(process.env.DESJ_WORKER_TIMEOUT_MS || 180_000);
 const MODEL = process.env.DESJ_WORKER_MODEL || 'sonnet';
 // Límites por persona: cuidan el cupo de la suscripción si alguien entra a una cuenta y dispara mensajes.
+// Hasta MAX_CHARS el mensaje va directo en el prompt. Más largo (hasta MAX_LONG_CHARS) se guarda en un archivo
+// de la carpeta temporal y Claude lo lee por partes con Read, las analiza y responde sobre el conjunto.
 const MAX_CHARS = Number(process.env.DESJ_WORKER_MAX_CHARS || 4000);
+const MAX_LONG_CHARS = Number(process.env.DESJ_WORKER_MAX_LONG_CHARS || 60_000);
+const HISTORY_ITEM_CHARS = 3000; // un mensaje largo viejo no infla los prompts siguientes
 const MAX_PER_HOUR = Number(process.env.DESJ_WORKER_MAX_PER_HOUR || 30);
 const MAX_PER_DAY = Number(process.env.DESJ_WORKER_MAX_PER_DAY || 150);
-// Un mensaje que esperó horas (computador apagado) ya no se responde: se marca vencido.
+// Un mensaje que esperó horas (computador apagado) ya no se responde: se marca vencido. Si la persona tocó
+// "Reintentar conexión" en la app, la espera se cuenta desde ese momento (context.retried_at).
 const MAX_AGE_HOURS = Number(process.env.DESJ_WORKER_MAX_AGE_HOURS || 6);
 const MAX_FILE = 10 * 1024 * 1024;
+// NEXUS (la plataforma web de Andrés): su MCP se suma SOLO para la cuenta DESJ_NEXUS_USER_ID; nadie más
+// lo recibe. El MCP entra con su propio login (career-os/mcp-server/.env), así que RLS de NEXUS sigue aplicando.
+const NEXUS_USER_ID = process.env.DESJ_NEXUS_USER_ID || '';
+const NEXUS_MCP = process.env.DESJ_NEXUS_MCP || path.join(HERE, '..', '..', 'career-os', 'mcp-server', 'index.js');
 const MAX_FILES_PER_MESSAGE = 5;
 
 const { DESJ_SUPABASE_URL, DESJ_SUPABASE_SECRET_KEY } = process.env;
@@ -52,6 +62,13 @@ const log = (...a) => console.log(new Date().toLocaleTimeString('es-VE'), ...a);
 const WORKER_NOTE = `Estás respondiendo desde el chat de la app DESJ. Tus herramientas son las de DESJ (mcp__desj__*): úsalas para actuar sobre los datos de la persona. No tienes terminal ni acceso a otros archivos.
 Si el mensaje trae un archivo adjunto, ábrelo con Read usando la ruta indicada y respóndele sobre su contenido. Lo mismo con los archivos que te dé leer_registro_medico.
 Tu respuesta final es exactamente el texto que la persona verá y escuchará: sin markdown, sin comentarios sobre herramientas.`;
+
+const NEXUS_NOTE = `También manejas NEXUS, la plataforma web de Andrés (proyectos de su agencia con tableros y tareas, Content Studio con ideas y planner semanal, finanzas, universidad, salud, moto y conocimiento), con las herramientas mcp__nexus__*. Úsalas cuando te diga "en NEXUS…" o hable de los proyectos de la agencia, sus tableros, clientes, ideas de contenido o el planner.
+- DESJ y NEXUS son sistemas distintos: pastillas, recordatorios, pendientes y lo personal de DESJ van con mcp__desj__*. Si no está claro en cuál de los dos va algo, pregunta antes de hacerlo.
+- Usa nexus_tables para saber dónde vive cada cosa y nexus_list para encontrar los ids antes de crear o editar (p. ej. el project_id y el column_id antes de agregar una tarea al tablero).
+- Borrar es definitivo: primero di exactamente qué vas a borrar y pide confirmación. Llama nexus_delete (confirm: true) solo si la persona ya lo confirmó en el historial.
+- Nunca repitas contraseñas ni credenciales, aunque te las pidan.
+- Al terminar, di en una o dos frases qué cambiaste en NEXUS.`;
 
 // ---------------------------------------------------------------------------
 
@@ -76,11 +93,36 @@ async function overLimit(userId) {
   return null;
 }
 
+/** Recorta un mensaje del historial muy largo (el completo sigue guardado en Supabase). */
+function clip(text) {
+  return text.length > HISTORY_ITEM_CHARS ? `${text.slice(0, HISTORY_ITEM_CHARS)}… [mensaje largo recortado]` : text;
+}
+
+/** Parte las líneas de más de 300 caracteres en el último espacio, para que Read las lea completas. */
+function wrapLines(text, width = 300) {
+  return text
+    .split('\n')
+    .flatMap((line) => {
+      const out = [];
+      let rest = line;
+      while (rest.length > width) {
+        const cut = rest.lastIndexOf(' ', width);
+        const at = cut > width / 2 ? cut : width;
+        out.push(rest.slice(0, at));
+        rest = rest.slice(at).trimStart();
+      }
+      out.push(rest);
+      return out;
+    })
+    .join('\n');
+}
+
 function todayIn(tz) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
 }
 
-function runClaude({ cwd, systemFile, mcpFile, withFile, prompt }) {
+function runClaude({ cwd, systemFile, mcpFile, withFile, nexus, prompt }) {
+  const tools = ['mcp__desj__*', ...(nexus ? ['mcp__nexus__*'] : []), withFile ? 'Read' : 'Read(./**)'].join(',');
   return new Promise((resolve, reject) => {
     const args = [
       '-p',
@@ -88,10 +130,10 @@ function runClaude({ cwd, systemFile, mcpFile, withFile, prompt }) {
       '--model', MODEL,
       '--system-prompt-file', systemFile,
       '--mcp-config', mcpFile,
-      '--strict-mcp-config', // solo el MCP de DESJ: nada de los otros conectores de este computador
+      '--strict-mcp-config', // solo el MCP de DESJ (y NEXUS para Andrés): nada de los otros conectores de este computador
       '--setting-sources', 'project', // sin ajustes ni hooks del usuario de Windows
       // Read: el adjunto del mensaje, o solo la carpeta temporal (archivos que baja leer_registro_medico).
-      '--allowedTools', withFile ? 'mcp__desj__*,Read' : 'mcp__desj__*,Read(./**)',
+      '--allowedTools', tools,
       '--permission-mode', 'dontAsk', // lo que no está permitido arriba se rechaza solo
     ];
     const child = spawn('claude', args, { cwd, shell: false, windowsHide: true });
@@ -127,9 +169,9 @@ function runClaude({ cwd, systemFile, mcpFile, withFile, prompt }) {
 }
 
 async function handle(msg) {
-  const age = Date.now() - new Date(msg.created_at).getTime();
+  const age = Date.now() - new Date(msg.context?.retried_at ?? msg.created_at).getTime();
   if (age > MAX_AGE_HOURS * 3_600_000) return fail(msg, 'El mensaje esperó demasiado (DESJ estaba desconectado). Envíalo de nuevo.');
-  if (msg.content.length > MAX_CHARS) return fail(msg, `El mensaje es muy largo (máximo ${MAX_CHARS} caracteres).`);
+  if (msg.content.length > MAX_LONG_CHARS) return fail(msg, `El mensaje es muy largo (máximo ${MAX_LONG_CHARS.toLocaleString('es-VE')} caracteres). Divídelo en dos mensajes.`);
   const limited = await overLimit(msg.user_id);
   if (limited) return fail(msg, limited);
 
@@ -172,11 +214,28 @@ async function handle(msg) {
       fileLine += `[Archivo ${i + 1}: "${f.name ?? path.basename(local)}" (${f.mime ?? 'archivo'}). Ábrelo con Read en: ${local}]\n`;
     }
 
-    const system = [SYSTEM_PROMPT, conv.kind === 'conocimiento' ? INTERVIEW_PROMPT : '', WORKER_NOTE, ctx.block].filter(Boolean).join('\n\n');
+    const nexus = Boolean(NEXUS_USER_ID) && msg.user_id === NEXUS_USER_ID && existsSync(NEXUS_MCP);
+    const system = [SYSTEM_PROMPT, conv.kind === 'conocimiento' ? INTERVIEW_PROMPT : '', WORKER_NOTE, nexus ? NEXUS_NOTE : '', ctx.block].filter(Boolean).join('\n\n');
     const history = ctx.history
-      .map((h) => `${h.role === 'user' ? 'Persona' : 'DESJ'}: ${typeof h.content === 'string' ? h.content : ''}`)
+      .map((h) => `${h.role === 'user' ? 'Persona' : 'DESJ'}: ${clip(typeof h.content === 'string' ? h.content : '')}`)
       .join('\n');
-    const prompt = `${history ? `<historial>\n${history}\n</historial>\n\n` : ''}${fileLine}Mensaje de la persona:\n${msg.content || 'Te envío estos archivos. Revísalos y dime lo importante.'}`;
+    // Mensaje largo: completo en ./mensaje.md (con líneas cortas, porque Read recorta las muy largas).
+    let body = msg.content || 'Te envío estos archivos. Revísalos y dime lo importante.';
+    if (msg.content.length > MAX_CHARS) {
+      const longFile = path.join(dir, 'mensaje.md');
+      await writeFile(longFile, wrapLines(msg.content));
+      body =
+        `[Este mensaje es largo (${msg.content.length.toLocaleString('es-VE')} caracteres) y está completo en el archivo ${longFile}. ` +
+        'Léelo con Read por partes (offset y limit de unas 150 líneas) hasta el final, sin saltarte nada. Analiza cada parte, ' +
+        'haz lo que pida en cada una (si hay varias cosas para registrar, regístralas todas) y al final responde sobre el conjunto.]\n' +
+        `Comienzo del mensaje:\n${msg.content.slice(0, 600)}…`;
+    }
+    // Si el mensaje esperó en la cola, "ayer" u "hoy" se refieren al día en que se escribió.
+    const waited = Date.now() - new Date(msg.created_at).getTime() > 3_600_000;
+    const sentAt = waited
+      ? `[La persona escribió este mensaje el ${new Intl.DateTimeFormat('es-VE', { timeZone: profile?.timezone || 'America/Caracas', dateStyle: 'full', timeStyle: 'short' }).format(new Date(msg.created_at))}; DESJ estaba desconectado y lo respondes ahora.]\n`
+      : '';
+    const prompt = `${history ? `<historial>\n${history}\n</historial>\n\n` : ''}${fileLine}${sentAt}Mensaje de la persona:\n${body}`;
 
     const systemFile = path.join(dir, 'system.md');
     const mcpFile = path.join(dir, 'mcp.json');
@@ -200,11 +259,12 @@ async function handle(msg) {
                 : {}),
             },
           },
+          ...(nexus ? { nexus: { type: 'stdio', command: process.execPath, args: ['--no-warnings', NEXUS_MCP] } } : {}),
         },
       }),
     );
 
-    const reply = (await runClaude({ cwd: dir, systemFile, mcpFile, withFile: Boolean(fileLine), prompt })) || 'Listo.';
+    const reply = (await runClaude({ cwd: dir, systemFile, mcpFile, withFile: Boolean(fileLine), nexus, prompt })) || 'Listo.';
     const actions = await readFile(actionsFile, 'utf8').then(JSON.parse).catch(() => null);
 
     const { error: saveError } = await db.from('messages').insert({
@@ -214,6 +274,7 @@ async function handle(msg) {
       content: reply,
       status: 'done',
       actions,
+      context: { reply_to: msg.id }, // la app encuentra así la respuesta de cada mensaje
     });
     if (saveError) return fail(msg, 'No pude guardar la respuesta.');
     await Promise.all([

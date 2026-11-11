@@ -1,17 +1,19 @@
 // Conversación con DESJ: texto, adjuntos (hasta 5 fotos / archivos por mensaje), dictado por voz y respuesta en voz. Vive en el Núcleo;
-// el historial, la conversación nueva y la voz están en el menú hamburguesa (chat-menu.tsx).
+// el historial y la conversación nueva están arriba a la derecha del Núcleo, y la voz en el menú hamburguesa (chat-menu.tsx).
+// Si el worker está apagado, tus mensajes quedan "en cola" y una franja sobre la barra ofrece "Reintentar conexión".
 import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
 import { Image } from 'expo-image';
-import { useRef, useState } from 'react';
-import { Alert, FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, FlatList, NativeSyntheticEvent, Platform, Pressable, StyleSheet, Text, TextInput, TextInputKeyPressEventData, TextStyle, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
-import { IconClip, IconClose, IconFile, IconMic, IconStop } from '@/components/icons';
+import { IconClip, IconClose, IconFile, IconMic, IconRetry, IconStop } from '@/components/icons';
+import { Label } from '@/components/ui';
 import { Attachment, MAX_FILES, MAX_TOTAL, pickAttachments } from '@/lib/attachments';
 import { ChatMsg, useChats } from '@/lib/chats';
 import { dictationAvailable, startDictation } from '@/lib/dictation';
-import { C } from '@/theme';
+import { C, R } from '@/theme';
 
 /** `voice`: leer en voz alta las respuestas (se cambia desde el menú hamburguesa). */
 export function ChatPanel({ voice }: { voice: boolean }) {
@@ -22,8 +24,31 @@ export function ChatPanel({ voice }: { voice: boolean }) {
   const [listening, setListening] = useState(false);
   const stopListening = useRef<(() => void) | null>(null);
   const list = useRef<FlatList<ChatMsg>>(null);
+  const field = useRef<TextInput>(null);
+  const [focused, setFocused] = useState(false);
+
+  // En web el campo (un <textarea>) crece con el texto hasta INPUT_MAX y después hace scroll.
+  // En el teléfono el TextInput multilínea ya crece solo hasta su maxHeight.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const el = field.current as unknown as HTMLTextAreaElement | null;
+    if (!el?.style) return;
+    el.style.height = '0px';
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, INPUT_MIN), INPUT_MAX)}px`;
+  }, [input]);
 
   const canSend = Boolean(input.trim() || files.length);
+
+  // Teclado de computadora: Enter envía y Shift+Enter baja a otra línea. En el iPhone la tecla de
+  // retorno siempre baja de línea y se envía con el botón, como en las apps de mensajes.
+  const onKey = (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+    if (Platform.OS !== 'web') return;
+    const key = e.nativeEvent as TextInputKeyPressEventData & { shiftKey?: boolean; isComposing?: boolean };
+    if (key.key === 'Enter' && !key.shiftKey && !key.isComposing) {
+      e.preventDefault();
+      submit();
+    }
+  };
 
   const notify = (msg: string) => (Platform.OS === 'web' ? window.alert(msg) : Alert.alert('DESJ', msg));
 
@@ -87,17 +112,24 @@ export function ChatPanel({ voice }: { voice: boolean }) {
         keyboardShouldPersistTaps="handled"
         onContentSizeChange={() => list.current?.scrollToEnd({ animated: true })}
         renderItem={({ item }) => (
-          <View style={item.from === 'me' ? styles.me : styles.bot}>
-            {item.attachments?.map((name, i) => (
-              <View key={`${name}${i}`} style={styles.attached}>
-                <IconFile color={C.accentSoft} size={15} />
-                <Text style={styles.attachedName} numberOfLines={1}>{name}</Text>
-              </View>
-            ))}
-            {item.text ? <Text style={styles.msg}>{item.text}</Text> : null}
+          <View style={item.from === 'me' ? styles.meWrap : undefined}>
+            <View style={item.from === 'me' ? styles.me : styles.bot}>
+              {item.attachments?.map((name, i) => (
+                <View key={`${name}${i}`} style={styles.attached}>
+                  <IconFile color={C.accentSoft} size={15} />
+                  <Text style={styles.attachedName} numberOfLines={1}>{name}</Text>
+                </View>
+              ))}
+              {item.text ? <Text style={styles.msg}>{item.text}</Text> : null}
+            </View>
+            {item.status ? (
+              <Label style={[styles.status, { color: item.status === 'error' ? C.bad : C.warn }]}>{item.status === 'error' ? '● Sin respuesta' : '● En cola'}</Label>
+            ) : null}
           </View>
         )}
       />
+
+      <QueueBar />
 
       {tray ? (
         <View style={styles.tray}>
@@ -123,7 +155,7 @@ export function ChatPanel({ voice }: { voice: boolean }) {
         </View>
       ))}
 
-      <View style={[styles.inputBar, listening && styles.inputBarListening]}>
+      <View style={[styles.inputBar, focused && styles.inputBarFocused, listening && styles.inputBarListening]}>
         <Pressable
           onPress={() => setTray(!tray)}
           style={styles.iconBtn}
@@ -136,11 +168,14 @@ export function ChatPanel({ voice }: { voice: boolean }) {
         <TextInput
           value={input}
           onChangeText={setInput}
-          onSubmitEditing={submit}
+          ref={field}
+          multiline
+          onKeyPress={onKey}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           placeholder={listening ? 'Te escucho…' : 'Escríbele a DESJ…'}
           placeholderTextColor={listening ? C.ok : C.muted}
-          style={styles.input}
-          returnKeyType="send"
+          style={[styles.input, NO_FOCUS_RING]}
         />
         {canSend && !listening ? (
           <Pressable onPress={submit} style={styles.send} accessibilityLabel="Enviar">
@@ -164,6 +199,67 @@ export function ChatPanel({ voice }: { voice: boolean }) {
   );
 }
 
+/** Franja sobre la barra del chat: cuántos mensajes esperan al worker y el botón "Reintentar conexión". */
+function QueueBar() {
+  const { unanswered, retrying, retry } = useChats();
+  const [note, setNote] = useState<{ text: string; tone: 'ok' | 'warn' | 'bad' } | null>(null);
+
+  // El resultado del reintento se muestra unos segundos y se va solo.
+  useEffect(() => {
+    if (!note) return;
+    const t = setTimeout(() => setNote(null), 8000);
+    return () => clearTimeout(t);
+  }, [note]);
+
+  if (!retrying && !unanswered && !note) return null;
+
+  const press = async () => {
+    setNote(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const res = await retry();
+    if (!res) return;
+    if (res.error) return setNote({ text: res.error, tone: 'bad' });
+    if (!res.online) {
+      return setNote({ text: `DESJ sigue desconectado (el computador que lo atiende está apagado). ${res.total === 1 ? 'Tu mensaje sigue' : `Tus ${res.total} mensajes siguen`} en cola.`, tone: 'warn' });
+    }
+    const pending = res.total - res.answered - res.failed;
+    const parts = [
+      res.answered ? `DESJ respondió ${res.answered === 1 ? '1 mensaje' : `${res.answered} mensajes`}` : '',
+      res.failed ? `${res.failed} no se ${res.failed === 1 ? 'pudo' : 'pudieron'} responder${res.reason ? ` (${res.reason.replace(/\.$/, '')})` : ''}` : '',
+      pending ? `${pending} ${pending === 1 ? 'sigue' : 'siguen'} en cola` : '',
+    ].filter(Boolean);
+    setNote({ text: `${parts.join(' · ') || 'Listo'}.`, tone: res.failed || pending ? 'warn' : 'ok' });
+  };
+
+  const done = retrying ? retrying.answered + retrying.failed : 0;
+  const text = retrying
+    ? done
+      ? `Conectado. DESJ va ${done} de ${retrying.total}…`
+      : 'Conectando con DESJ…'
+    : (note?.text ?? `${unanswered === 1 ? '1 mensaje' : `${unanswered} mensajes`} sin respuesta: DESJ estaba desconectado.`);
+  const dot = retrying ? C.accentSoft : note ? C[note.tone] : C.warn;
+
+  return (
+    <View style={styles.queue} accessibilityLiveRegion="polite">
+      <Text style={styles.queueText}>
+        <Text style={{ color: dot }}>● </Text>
+        {text}
+      </Text>
+      {unanswered || retrying ? (
+        <Pressable
+          onPress={press}
+          disabled={Boolean(retrying)}
+          style={({ pressed }) => [styles.retry, pressed && { backgroundColor: C.surfaceSelected }, retrying && { opacity: 0.6 }]}
+          accessibilityRole="button"
+          accessibilityState={{ busy: Boolean(retrying) }}>
+          <IconRetry color={C.accentSoft} size={16} />
+          <Text style={styles.retryText}>{retrying ? 'Reintentando…' : 'Reintentar conexión'}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 function TrayBtn({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={styles.trayBtn} accessibilityRole="button">
@@ -172,11 +268,24 @@ function TrayBtn({ label, onPress }: { label: string; onPress: () => void }) {
   );
 }
 
+const INPUT_MIN = 44; // una línea, alineada con los botones de la barra
+const INPUT_MAX = 140; // unas 6 líneas; de ahí en adelante el campo hace scroll
+// Chrome dibuja su anillo de foco con outline-style "auto", que ignora outlineWidth: 0. "none" es válido en
+// react-native-web aunque los tipos de React Native no lo incluyan.
+const NO_FOCUS_RING = (Platform.OS === 'web' ? { outlineStyle: 'none' } : {}) as TextStyle;
+
 const styles = StyleSheet.create({
+  meWrap: { alignItems: 'flex-end', gap: 4 },
+  status: { fontSize: 10, marginRight: 4 },
+  queue: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, paddingVertical: 8, paddingHorizontal: 12, borderRadius: R.card, borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.card },
+  queueText: { flex: 1, minWidth: 180, color: C.text, fontSize: 13.5, lineHeight: 19 },
+  retry: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 14, borderRadius: R.pill, borderWidth: 1, borderColor: C.border },
+  retryText: { color: C.accentSoft, fontSize: 14, fontWeight: '600' },
   me: { alignSelf: 'flex-end', maxWidth: '82%', backgroundColor: C.bubbleMe, borderRadius: 16, borderBottomRightRadius: 4, padding: 12 },
   bot: { alignSelf: 'flex-start', maxWidth: '86%', backgroundColor: C.surfaceInput, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 16, borderBottomLeftRadius: 4, padding: 12 },
   msg: { color: C.text, fontSize: 15, lineHeight: 21 },
-  inputBar: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.surfaceInput, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 28, padding: 6 },
+  inputBar: { flexDirection: 'row', alignItems: 'flex-end', gap: 4, backgroundColor: C.surfaceInput, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 28, padding: 6 },
+  inputBarFocused: { borderColor: C.border },
   inputBarListening: { borderColor: C.ok },
   iconBtn: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
   mic: { backgroundColor: 'transparent', borderWidth: 1, borderColor: C.border },
@@ -191,6 +300,7 @@ const styles = StyleSheet.create({
   remove: { paddingHorizontal: 6 },
   attached: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
   attachedName: { color: C.accentSoft, fontSize: 13.5, flexShrink: 1 },
-  input: { flex: 1, color: C.text, fontSize: 15, minHeight: 40 },
+  // El foco se marca en el borde de la barra (inputBarFocused), no con el recuadro del navegador.
+  input: { flex: 1, color: C.text, fontSize: 15, lineHeight: 20, minHeight: INPUT_MIN, maxHeight: INPUT_MAX, paddingTop: 12, paddingBottom: 12, textAlignVertical: 'top' },
   send: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
 });

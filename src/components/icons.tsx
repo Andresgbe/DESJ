@@ -96,6 +96,14 @@ export const IconPlus = ({ color, size = 16 }: P) => (
   </Svg>
 );
 
+// Reintentar conexión: flecha circular.
+export const IconRetry = ({ color, size = 16 }: P) => (
+  <Svg {...base(size, color)}>
+    <Path d="M20 12a8 8 0 1 1-2.34-5.66" />
+    <Path d="M20 4v5h-5" />
+  </Svg>
+);
+
 export const IconFile = ({ color, size = 16 }: P) => (
   <Svg {...base(size, color)}>
     <Path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />

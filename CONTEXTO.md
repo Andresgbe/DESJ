@@ -73,7 +73,7 @@ Encuesta: propósito = *ahorrar tiempo en tareas repetitivas*; tipo = *app o pla
 | Núcleo | Saludo, resumen del día, accesos rápidos | 0 ✅ |
 | Chat + voz | Hablar/escribir con DESJ; responde en texto y voz | 0 (demo) → 1 (Claude) |
 | Recordatorios / rutinas | Avisos a su hora; resumen diario 07:40 | 0 ✅ (locales) |
-| Calendario | Estilo Google Calendar: vistas Agenda, Día, 3 días, Semana y Mes con eventos en los 11 colores de Google, detalle al tocar y botón "+" para crear (con color). Google Calendar si está conectado (si no, el del teléfono), recordatorios de DESJ y pastillas | 1 ✅ (calendario del teléfono requiere development build) |
+| Calendario | Estilo Google Calendar: vistas Agenda, Día, Semana y Mes con eventos en los 11 colores de Google, detalle al tocar y botón "+" para crear (con color). Google Calendar si está conectado (si no, el del teléfono), recordatorios de DESJ y pastillas | 1 ✅ (calendario del teléfono requiere development build) |
 | Conocimiento | Archivos Markdown por usuario (perfil, salud, negocios, preferencias) que DESJ lee siempre; entrevista para llenarlos | 1 ✅ (guiada sin nube; con Claude al conectar) |
 | Pendientes | Lista de tareas por usuario (reemplaza la pestaña Rutinas) | 1 ✅ |
 | Historial de chats | Varias conversaciones por usuario; la memoria es común a todas | 1 ✅ |
@@ -121,7 +121,7 @@ src/
     _layout.tsx            ← raíz: sesión, datos, pila (Stack) con las pestañas y las pantallas del menú de perfil
     (tabs)/_layout.tsx     ← 5 pestañas: Núcleo, Calendario, YO, Módulos, Pendientes
     (tabs)/index.tsx       ← Núcleo: al entrar solo el cerebro grande + botón "Hablar con DESJ"; al tocarlo el cerebro se achica y aparece el chat, estado del día y el chat con DESJ (con historial)
-    (tabs)/calendario.tsx  ← estilo Google Calendar: Agenda / Día / 3 días / Semana / Mes, detalle del evento, "+" flotante (Screen overlay) para crear con color
+    (tabs)/calendario.tsx  ← estilo Google Calendar: Agenda / Día / Semana / Mes, detalle del evento, "+" flotante (Screen overlay) para crear con color
     (tabs)/yo/index.tsx    ← módulo YO: armadura holográfica que gira + altura, peso, IMC, edad, sangre, pastillas; entrada a los módulos personales
     (tabs)/yo/salud.tsx    ← YO · Salud: pestañas Pastillas (dosis múltiples, horas opcionales, recordatorios), Historial (año → mes → día) y Contactos
     (tabs)/yo/examen/[id].tsx ← detalle de un registro del historial: datos, archivos por tipo con vista previa y descarga, editar, borrar
@@ -142,6 +142,7 @@ src/
     suit-graph.ts          ← modelo de la armadura de YO (superficies con anillos y costuras) · suit-core.tsx (Skia) / suit-core.web.tsx (canvas)
     chat-panel.tsx         ← conversación (texto + voz) · chat-history.tsx ← hoja de historial
     chat-menu.tsx          ← menú hamburguesa del Núcleo: historial, nueva conversación, voz, volver a DESJ
+    chat-panel.tsx         ← la conversación: burbujas ("En cola" / "Sin respuesta"), franja "Reintentar conexión", barra del chat
   lib/motion.tsx           ← interruptor ANIM ON/OFF del header (se guarda en el dispositivo): en OFF todo queda estático
     profile-menu.tsx       ← círculo de perfil y menú desplegable
     login.tsx, icons.tsx
@@ -161,7 +162,7 @@ src/
     dates.ts               ← fechas DD/MM/AAAA ↔ YYYY-MM-DD, "14 mar 2023", "hace 3 años"
     finance.ts             ← Finanzas: conversión a dólar BCV, totales, datos (local o Supabase) · dolar-api.ts ← tasas de hoy: Edge Function `tasas` (DolarAPI + USDT de Binance P2P, como cc-sacramento; código en supabase/functions/_shared/dolar.ts) o DolarAPI directo sin sesión
     reminders.ts           ← registro de recordatorios de DESJ (notificaciones locales)
-    brain.ts               ← askDesj() (Edge Function) y think() (reglas, modo demo)
+    brain.ts               ← askDesj() (Edge Function o cola del worker), retryQueue() ("Reintentar conexión") y think() (reglas, modo demo)
     layout.ts              ← useLayout(): teléfono o computadora según el ancho de la ventana
     calendar.ts, notifications.ts, supabase.ts, auth.tsx, confirm.ts
   theme.ts                 ← C, S, R: se arman desde design/tokens.json
@@ -196,6 +197,10 @@ Inspirada en el carrusel de Adrián y en los grafos tipo "Jarvis": fondo casi ne
 **Decisión (18 oct 2026):** el HUD de anillos concéntricos se reemplazó por el cerebro. Se dibuja con `@shopify/react-native-skia` en el teléfono (viene en Expo Go) y con `<canvas>` en web. Cuando DESJ piensa, el cerebro acelera, salen más señales y el núcleo brilla más.
 
 **Núcleo (18 oct 2026):** sin saludo ni fecha. Al entrar solo se ve DESJ grande y centrado con el botón **HABLAR CON DESJ**; al tocarlo el cerebro se achica y sube (450 ms) y aparece la conversación. Historial, conversación nueva, voz y "Volver a DESJ" están en el menú hamburguesa del header.
+
+**Chat más claro (11 nov 2026):** con la conversación abierta, **Historial** y **Nueva** quedan a la vista arriba a la derecha (botones de contorno con ícono y texto); el menú hamburguesa los repite y suma la voz y "Volver a DESJ". Tus mensajes que el worker no respondió muestran "● En cola" (o "● Sin respuesta" si fallaron), y sobre la barra aparece una franja con **Reintentar conexión**: vuelve a poner en la cola todo lo pendiente o fallido (hasta 50 por toque) (con la agenda de hoy y `context.retried_at`, para que el worker no lo dé por vencido), espera ~25 s a que el worker lo tome (si no, sigue apagado y todo queda en cola), muestra el avance, recarga la conversación y ejecuta en el teléfono los avisos y eventos de cada respuesta. El worker guarda `context.reply_to` en cada respuesta para que la app sepa a qué mensaje contesta, y si el mensaje esperó más de 1 h le dice a Claude cuándo se escribió (para que "ayer" sea el día correcto).
+
+**Campo del chat y mensajes largos (11 nov 2026):** el campo es multilínea y crece hasta ~6 líneas (después hace scroll). En computadora Enter envía y Shift+Enter baja de línea; en el iPhone la tecla de retorno baja de línea y se envía con el botón. El foco se marca en el borde de la barra, sin el anillo del navegador. En el worker, un mensaje de más de 4000 caracteres (hasta 60.000, `DESJ_WORKER_MAX_LONG_CHARS`) ya no se rechaza: se guarda en `mensaje.md` de la carpeta temporal y Claude lo lee por partes con Read, hace lo que pida cada parte y responde sobre el conjunto; en el historial de los mensajes siguientes se recorta a 3000 caracteres. El cerebro `api` (Edge Function) sigue con el límite de 4000.
 
 **Módulo YO (18 oct 2026):** la pestaña Salud se reemplazó por **YO**. Muestra una armadura holográfica genérica que gira (inspirada en la referencia; no es el modelo de Iron Man, que es de Marvel) con tus datos a los lados, leídos de perfil.md y salud.md con el formato `- **Campo:** valor` (Talla, Peso, Tipo de sangre, Fecha de nacimiento o Edad). Adentro viven los módulos personales: Salud, Plan físico y Tus datos.
 
@@ -273,6 +278,7 @@ npx expo install <pkg> # instalar librerías (NUNCA npm install <pkg>)
 - Requisitos: Node 24, Claude Code de terminal con sesión iniciada (`irm https://claude.ai/install.ps1 | iex`, luego `claude`) y `desj-worker/.env` con la clave secreta de Supabase (copiar `.env.example`).
 - Arranque automático: `desj-worker\instalar-inicio.ps1` crea la tarea programada "DESJ worker", que corre `start-worker.bat` sin ventana al iniciar sesión en Windows y lo reinicia si se cae. Log: `desj-worker/worker.log`. Para quitarla: `instalar-inicio.ps1 -Quitar`.
 - Solo responde con el PC prendido, con la sesión iniciada y sin suspender.
+- **NEXUS desde DESJ (11 nov 2026):** para la cuenta `DESJ_NEXUS_USER_ID` (solo Andrés) el worker suma el MCP de NEXUS (`career-os/mcp-server/index.js`, ruta cambiable con `DESJ_NEXUS_MCP`) y permite `mcp__nexus__*`; así "DESJ, agrega una tarea al tablero de Lorenzo Broker" funciona. Ese MCP entra con el login de Andrés en `career-os/mcp-server/.env` (anon key, RLS de NEXUS) y trae herramientas genéricas de ver/crear/editar/borrar (`crud.js`): contraseñas ocultas, borrar solo con confirmación. Steven y el cerebro `api` no lo tienen.
 
 ### Publicar la versión web instalable (iPhone gratis)
 
@@ -319,7 +325,7 @@ npm run deploy:web         # exporta a dist/ y publica en producción (EAS Hosti
 - **To buy** (`/modulos/tobuy`, `lib/tobuy.ts`, migración `20261026010000_tobuy`): lista de compras con categorías (se siembran Supermercado, Farmacia y Hogar; se agregan, renombran, cambian de color y borran) y filtro por categoría. Solo se ven las pendientes, agrupadas por categoría; lo marcado pasa a "Completado", que está plegado. DESJ todavía no lee ni edita la lista.
 
 **Calendario estilo Google (26 oct 2026):** se rehízo para parecerse a Google Calendar.
-- Vistas Agenda, Día, 3 días, Semana y Mes; la elegida se recuerda en el dispositivo (`desj:calendar:view`).
+- Vistas Agenda, Día, Semana y Mes (la de 3 días se quitó el 11 nov 2026); la elegida se recuerda en el dispositivo (`desj:calendar:view`).
 - Los eventos van en bloques de color sólido. Para Google se usan sus 11 colores de evento (`GOOGLE_COLORS` en `lib/calendar.ts`, según el `colorId`; sin color, Pavo real). Los recordatorios de DESJ van en ámbar (`C.warn`). El texto sobre cada color se elige claro u oscuro según la luminancia.
 - Tocar un evento abre su detalle (fecha, hora, lugar, origen y Borrar).
 - El botón flotante "+" (`Screen overlay`) abre Crear: título, Evento o Recordatorio, fecha, desde/hasta y color. El color llega a Google como `colorId` por `google-auth` → `calendarInsert`.

@@ -3,16 +3,17 @@
 // - Sin nube: se guardan en el teléfono, con la misma interfaz.
 // La memoria de DESJ (tabla memories) es común a todas las conversaciones; el historial solo ordena las charlas.
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
 
 import { Attachment, Uploaded, uploadAttachment } from '@/lib/attachments';
 import { useAuth } from '@/lib/auth';
-import { askDesj, think } from '@/lib/brain';
+import { askDesj, countUnanswered, retryQueue, RetryProgress, RetryResult, think } from '@/lib/brain';
 import { today, useStore } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 
 export type Conversation = { id: string; title: string; updatedAt: string };
-export type ChatMsg = { id: string; from: 'me' | 'desj'; text: string; attachments?: string[] };
+/** `status` (solo mensajes tuyos en la nube): 'pending' sigue en la cola del worker, 'error' no se pudo responder. */
+export type ChatMsg = { id: string; from: 'me' | 'desj'; text: string; attachments?: string[]; status?: 'pending' | 'error' };
 
 // En la nube cada adjunto se guarda como una línea "[Adjunto: nombre]" al final del mensaje.
 const ATTACHMENT_LINE = /\n?\[Adjunto: (.+)\]$/gm;
@@ -35,6 +36,12 @@ type Ctx = {
   remove: (id: string) => Promise<void>;
   /** Cambia el título de una conversación. Devuelve false si no se pudo. */
   rename: (id: string, title: string) => Promise<boolean>;
+  /** Mensajes tuyos sin respuesta del worker (en cola o fallidos hace poco). 0 sin nube. */
+  unanswered: number;
+  /** Progreso de "Reintentar conexión" mientras corre; null si no está corriendo. */
+  retrying: RetryProgress | null;
+  /** Vuelve a mandar al worker todos los mensajes sin respuesta y trae sus respuestas. */
+  retry: () => Promise<RetryResult | null>;
 };
 
 const ChatsCtx = createContext<Ctx | null>(null);
@@ -57,23 +64,36 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [busy, setBusy] = useState(false);
+  const [unanswered, setUnanswered] = useState(0);
+  const [retrying, setRetrying] = useState<RetryProgress | null>(null);
+  // La conversación abierta en este momento (el reintento dura minutos y puedes cambiar de conversación).
+  const activeRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeRef.current = activeId;
+  }, [activeId]);
 
   const loadMessages = useCallback(async (id: string) => {
     const { data } = await supabase
       .from('messages')
-      .select('id, role, content')
+      .select('id, role, content, status')
       .eq('conversation_id', id)
       .order('created_at', { ascending: true })
       .limit(200);
     return (data ?? []).map((r): ChatMsg => {
       const names = [...r.content.matchAll(ATTACHMENT_LINE)].map((m) => m[1]);
-      return { id: r.id, from: r.role === 'user' ? 'me' : 'desj', text: names.length ? r.content.replace(ATTACHMENT_LINE, '').trim() : r.content, attachments: names.length ? names : undefined };
+      const status = r.role === 'user' && (r.status === 'pending' || r.status === 'running' || r.status === 'error') ? (r.status === 'error' ? 'error' : 'pending') : undefined;
+      return { id: r.id, from: r.role === 'user' ? 'me' : 'desj', text: names.length ? r.content.replace(ATTACHMENT_LINE, '').trim() : r.content, attachments: names.length ? names : undefined, status };
     });
+  }, []);
+
+  const checkQueue = useCallback(() => {
+    countUnanswered().then((n) => n !== null && setUnanswered(n));
   }, []);
 
   // Carga inicial: se retoma la conversación más reciente.
   useEffect(() => {
     if (cloud) {
+      countUnanswered().then((n) => n !== null && setUnanswered(n));
       supabase
         .from('conversations')
         .select('id, title, updated_at')
@@ -133,7 +153,8 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
         }
         const res = await askDesj(text, activeId, 'chat', uploaded);
         const answer: ChatMsg = { id: `${Date.now()}r`, from: 'desj', text: res.reply };
-        setMessages((m) => [...m, answer]);
+        setMessages((m) => [...m.map((x) => (x.id === mine.id && res.queued ? { ...x, status: 'pending' as const } : x)), answer]);
+        if (res.queued) checkQueue();
         if (res.dataChanged) refresh();
         if (!res.failed && res.conversationId) {
           const id = res.conversationId;
@@ -212,8 +233,35 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     return true;
   };
 
+  const retry = async () => {
+    if (!cloud || retrying) return null;
+    const reload = async (ids: string[]) => {
+      const id = activeRef.current;
+      if (id && ids.includes(id)) setMessages(await loadMessages(id));
+    };
+    // Mientras corre, los mensajes reenviados se ven "en cola" y cada respuesta aparece al llegar.
+    setMessages((m) => m.map((x) => (x.status === 'error' ? { ...x, status: 'pending' } : x)));
+    setRetrying({ total: unanswered, answered: 0, failed: 0, conversationIds: [] });
+    try {
+      const res = await retryQueue((p) => {
+        setRetrying(p);
+        reload(p.conversationIds);
+      });
+      if (res.dataChanged) refresh();
+      if (res.conversationIds.length) {
+        const now = new Date().toISOString();
+        setConversations((list) => [...list].map((c) => (res.conversationIds.includes(c.id) ? { ...c, updatedAt: now } : c)).sort(byRecent));
+      }
+      await reload(activeRef.current ? [activeRef.current] : []);
+      return res;
+    } finally {
+      setRetrying(null);
+      checkQueue();
+    }
+  };
+
   return (
-    <ChatsCtx.Provider value={{ ready, conversations, activeId, messages, busy, send, newChat, open, remove, rename }}>
+    <ChatsCtx.Provider value={{ ready, conversations, activeId, messages, busy, send, newChat, open, remove, rename, unanswered: cloud ? unanswered : 0, retrying, retry }}>
       {children}
     </ChatsCtx.Provider>
   );

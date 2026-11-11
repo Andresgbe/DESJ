@@ -1,4 +1,4 @@
-// Pantalla · Calendario, al estilo de Google Calendar: vistas Agenda, Día, 3 días, Semana y Mes; eventos en
+// Pantalla · Calendario, al estilo de Google Calendar: vistas Agenda, Día, Semana y Mes; eventos en
 // bloques de color sólido (los 11 colores de Google), línea roja de "ahora", detalle al tocar un evento y botón
 // flotante "+" para crear (con color). Junta tres fuentes: tu Google Calendar (si lo conectaste en Ajustes; si
 // no, el calendario del teléfono en la app instalada), los recordatorios de DESJ y el plan diario de pastillas.
@@ -35,17 +35,16 @@ const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 
 const DAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const WEEK = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
 const MAX_CHIPS = 3; // etiquetas visibles por día en Mes; el resto va en "+N más"
-const HOUR_H = 52; // alto de una hora en Día, 3 días y Semana
+const HOUR_H = 52; // alto de una hora en Día y Semana
 const GUTTER = 44; // columna de las horas
 const MIN_BLOCK = 22; // alto mínimo de un evento corto, para que se lea
 const AGENDA_DAYS = 30;
 const VIEW_KEY = 'desj:calendar:view';
 
-type CalView = 'agenda' | 'dia' | '3dias' | 'semana' | 'mes';
+type CalView = 'agenda' | 'dia' | 'semana' | 'mes';
 const VIEWS: { id: CalView; label: string }[] = [
   { id: 'agenda', label: 'Agenda' },
   { id: 'dia', label: 'Día' },
-  { id: '3dias', label: '3 días' },
   { id: 'semana', label: 'Semana' },
   { id: 'mes', label: 'Mes' },
 ];
@@ -140,7 +139,7 @@ export default function Calendario() {
     AsyncStorage.setItem(VIEW_KEY, v).catch(() => null);
   };
 
-  // El mes sigue al día elegido; se carga el mes con margen para que Semana, 3 días y Agenda (30 días) quepan.
+  // El mes sigue al día elegido; se carga el mes con margen para que Semana y Agenda (30 días) quepan.
   const go = (day: Date) => {
     setSelected(day);
     if (day.getMonth() !== month.getMonth() || day.getFullYear() !== month.getFullYear()) setMonth(new Date(day.getFullYear(), day.getMonth(), 1));
@@ -255,13 +254,13 @@ export default function Calendario() {
   };
 
   // ‹ › avanzan según la vista.
-  const STEP: Record<CalView, number> = { agenda: 7, dia: 1, '3dias': 3, semana: 7, mes: 0 };
+  const STEP: Record<CalView, number> = { agenda: 7, dia: 1, semana: 7, mes: 0 };
   const step = (dir: 1 | -1) => {
     if (view === 'mes') setMonth(new Date(month.getFullYear(), month.getMonth() + dir, 1));
     else go(addDays(selected, STEP[view] * dir));
   };
 
-  const days = view === 'semana' ? Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(selected), i)) : view === '3dias' ? [0, 1, 2].map((i) => addDays(selected, i)) : [selected];
+  const days = view === 'semana' ? Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(selected), i)) : [selected];
   const [titleText, titleAccent] =
     view === 'mes'
       ? [MONTHS[month.getMonth()], String(month.getFullYear())]
@@ -476,7 +475,7 @@ function EventCard({ item, onPress }: { item: Item; onPress: () => void }) {
   );
 }
 
-// ---------------------------------------------------------------------------- Día, 3 días y Semana
+// ---------------------------------------------------------------------------- Día y Semana
 
 /** Reparte los eventos que se pisan en columnas, como Google Calendar. */
 function layoutDay(items: Item[]) {
