@@ -345,6 +345,7 @@ npm run deploy:web         # exporta a dist/ y publica en producción (EAS Hosti
 - Documento de concepto: https://claude.ai/code/artifact/cfc073d2-84f4-4bbc-a24f-b3d96cb515ba
 - Mockups (app, web y propuestas de salud): https://claude.ai/artifact/USELQwhxi7JreX7RcAGWJX
 - Logo Prisma B y paleta Pantone (propuesta en Gemini): https://gemini.google.com/share/a6e977fe4c45?social_preview=true&skid=b4415182-9fcf-44bd-9474-36238675a063
+- Lista de cambios para compartir: `CAMBIOS.md` (lo nuevo va en "Próxima entrega"; al compartirlo, pasa a una sección con su fecha).
 - Referencia: @adrian.alvarezl en Instagram (carrusel "JARVIS").
 
 **Calendario Semana/Día y archivos en mosaico (25 oct 2026):** la pestaña Calendario tiene vistas Mes, Semana y Día; en Semana y Día los eventos se ubican por hora (los que se pisan van en columnas), los de todo el día arriba, y una línea marca la hora actual. Tocar un espacio vacío abre Agregar con esa hora; tocar el día en la cabecera abre la vista Día. En Salud, los archivos de un registro se ven como mosaicos pequeños (2 por fila en el teléfono, 3 o 4 en pantallas anchas); la foto en grande solo se abre con "Ampliar" (visor dentro de la app; los PDF se abren en el visor del teléfono o del navegador).
