@@ -1,5 +1,5 @@
 // Modelo del cerebro de DESJ: una red neuronal 3D (nodos agrupados por módulo y conexiones). En el
-// centro va el Prisma (prism.tsx), dibujado encima del lienzo. Se genera una sola vez con semilla fija, así sale igual siempre.
+// centro va el Corazón de DESJ (el Prisma, prism.tsx), dibujado encima del lienzo. Se genera una sola vez con semilla fija, así sale igual siempre.
 // `computeFrame` proyecta la red girada en 2D para un cuadro; es un worklet para que en el teléfono
 // corra en el hilo de UI (Skia) y en web se llama desde requestAnimationFrame (canvas).
 
@@ -48,7 +48,7 @@ function normalize(v: number[]) {
   return [v[0] / l, v[1] / l, v[2] / l];
 }
 
-export function buildGraph(n = 1500, seed = 11): Graph {
+export function buildGraph(n = 1200, seed = 11): Graph {
   const rand = seeded(seed);
   const gauss = () => (rand() + rand() + rand() - 1.5) / 1.5;
   const g: Graph = { n: 0, x: [], y: [], z: [], c: [], big: [], hubs: [], edges: [], signals: [] };

@@ -1,4 +1,4 @@
-// Prisma de DESJ (logo "Prisma B"): tres cuchillas de vidrio biselado alrededor de un triángulo,
+// Corazón de DESJ: el Prisma (logo "Prisma B"): tres cuchillas de vidrio biselado alrededor de un triángulo,
 // repetidas cada 120°. Es el logo de la app y el centro del cerebro.
 // Este archivo es dibujo puro (texto SVG, sin React Native) para que lo usen la app (prism.tsx) y el
 // script de íconos (design/logo.mjs). Coordenadas de un lienzo de 1024 con el centro de giro en (0, 0).
@@ -96,6 +96,18 @@ export function prismInner(p: PrismPalette) {
     `<polygon points="0,-116 -100,58 100,58" fill="none" stroke-dasharray="6 5"/>` +
     `<circle r="8" fill="${p.center}"/>` +
     `</g>`
+  );
+}
+
+/**
+ * Anillo que rodea al corazón dentro del cerebro: un disco oscuro (atenúa los nodos de atrás para que
+ * el corazón se lea), un círculo fino y otro punteado por dentro. `dark` es el color del fondo.
+ */
+export function prismRing(p: PrismPalette, dark: string) {
+  return (
+    `<circle r="430" fill="${dark}" fill-opacity="0.6"/>` +
+    `<circle r="430" fill="none" stroke="${p.main}" stroke-width="5" stroke-opacity="0.9"/>` +
+    `<circle r="400" fill="none" stroke="${p.highlight}" stroke-width="7" stroke-opacity="0.5" stroke-dasharray="3 16"/>`
   );
 }
 

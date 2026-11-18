@@ -1,4 +1,4 @@
-// El Prisma de DESJ: el logo, dibujado en el centro del cerebro y en el header.
+// El Corazón de DESJ: el Prisma, el logo de la app. Se dibuja en el centro del cerebro y en el header.
 // El color cambia con el estado de DESJ (en línea, escuchando, pensando, respondiendo, alerta) y las
 // cuchillas se separan o laten según el estado. Cada cuchilla es una capa propia que se mueve con
 // Reanimated (solo transform), así el SVG no se vuelve a dibujar en cada cuadro.
@@ -25,6 +25,7 @@ import {
   prismDefs,
   prismInner,
   prismPalette,
+  prismRing,
   prismShard,
   SHARD_ANGLES,
   svgCentered,
@@ -111,7 +112,7 @@ function PrismLayers({ size, state, id, spreads }: { size: number; state: PrismS
   const xml = useMemo(() => {
     const p = prismPalette(PRISM[state], C.bg);
     return {
-      base: svgCentered(prismAura(p, id) + prismInner(p)),
+      base: svgCentered(prismRing(p, C.bg) + prismAura(p, id) + prismInner(p)),
       shards: SHARD_ANGLES.map((a, i) => svgCentered(`<defs>${prismDefs(p, `${id}${i}`)}</defs>${prismShard(p, `${id}${i}`, a)}`)),
     };
   }, [state, id]);

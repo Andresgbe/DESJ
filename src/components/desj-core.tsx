@@ -1,5 +1,5 @@
-// Núcleo de DESJ (estilo JARVIS): el cerebro, una red neuronal 3D que gira despacio con el Prisma
-// (el logo) en el centro, y la hora y el estado debajo. El cerebro vive en neural-core (Skia en el
+// Núcleo de DESJ (estilo JARVIS): el cerebro, una red neuronal 3D que gira despacio con el Corazón
+// de DESJ (el Prisma, el logo) en el centro, y la hora y el estado debajo. El cerebro vive en neural-core (Skia en el
 // teléfono, canvas en web) y el prisma en prism.tsx; el color del prisma sigue el estado de DESJ.
 // `size` es el tamaño al que se dibuja; `display`, el tamaño en pantalla. Al cambiar `display`
 // el cerebro se agranda o achica con una animación (escala del lienzo, sin volver a generarlo).
@@ -22,8 +22,8 @@ export const STATE_LABEL: Record<PrismState, string> = {
   alert: 'ALERTA',
 };
 
-/** Lado del prisma respecto del cerebro. */
-const PRISM_SIZE = 0.36;
+/** Lado del Corazón de DESJ (el prisma) respecto del cerebro. */
+const PRISM_SIZE = 0.42;
 
 /** `active={false}` pausa el cerebro y el prisma (pantalla fuera de vista). `label` reemplaza el texto del estado. */
 type Props = { size?: number; display?: number; label?: string; state?: PrismState; active?: boolean };
