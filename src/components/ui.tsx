@@ -17,7 +17,7 @@ import { C, mono, S } from '@/theme';
  * `back`: muestra la flecha para volver (pantallas dentro de un módulo, como YO → Salud).
  */
 /** `overlay`: algo que flota sobre el contenido sin desplazarse con él (p. ej. el botón "+" del Calendario). */
-export function Screen({ module, children, scroll = true, wide = false, menu, back = false, overlay }: { module: string; children: ReactNode; scroll?: boolean; wide?: boolean; menu?: ReactNode; back?: boolean; overlay?: ReactNode }) {
+export function Screen({ children, scroll = true, wide = false, menu, back = false, overlay }: { /** Nombre del módulo ("Módulo 01 · Núcleo"). Ya no se muestra en el header; queda como referencia. */ module: string; children: ReactNode; scroll?: boolean; wide?: boolean; menu?: ReactNode; back?: boolean; overlay?: ReactNode }) {
   // Teléfono: columna de S.column. Computadora (ventana ≥ S.breakpoint): columna más ancha, S.columnDesk.
   const layout = useLayout();
   const h = layout.header;
@@ -44,7 +44,6 @@ export function Screen({ module, children, scroll = true, wide = false, menu, ba
           <View>{menu}</View>
         )}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: h.gap, flexShrink: 1 }}>
-          <Label numberOfLines={1} style={{ flexShrink: 1, fontSize: h.label, letterSpacing: h.labelSpacing }}>{module}</Label>
           <MotionToggle />
           <ProfileButton />
         </View>
