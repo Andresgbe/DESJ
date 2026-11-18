@@ -37,6 +37,11 @@ import { C, PRISM } from '@/theme';
 export type { PrismState } from '@/components/prism-shape';
 
 const EASE = Easing.bezier(0.77, 0, 0.175, 1);
+/**
+ * Color de las sombras del vidrio por estado (por defecto, el fondo). Pensando es un azul muy claro:
+ * con sombras hacia el fondo casi negro se veía gris; con sombras azules se lee azul.
+ */
+const SHADE: Partial<Record<PrismState, string>> = { thinking: C.border };
 /** Duración del fundido entre colores de estado (ms). */
 const FADE = 300;
 
@@ -111,7 +116,7 @@ function Layer({ visible, first, running, children }: { visible: boolean; first:
 
 function PrismLayers({ size, state, id, spreads }: { size: number; state: PrismState; id: string; spreads: SharedValue<number>[] }) {
   const xml = useMemo(() => {
-    const p = prismPalette(PRISM[state], C.bg);
+    const p = prismPalette(PRISM[state], SHADE[state] ?? C.bg);
     return {
       base: svgCentered(prismRing(p, C.bg) + prismAura(p, id) + prismInner(p)),
       shards: SHARD_ANGLES.map((a, i) => svgCentered(`<defs>${prismDefs(p, `${id}${i}`)}</defs>${prismShard(p, `${id}${i}`, a)}`)),

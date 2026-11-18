@@ -209,7 +209,7 @@ Inspirada en el carrusel de Adrián y en los grafos tipo "Jarvis": fondo casi ne
 |---|---|---|---|---|
 | En línea | `prism-online` | `#3993F5` Azul Eléctrico (PMS 2727 C) | reposo | respira despacio |
 | Escuchando | `prism-listening` | `#45B6FE` Cian Holográfico (PMS 2985 C) | dictado por voz activo | cuchillas un poco abiertas |
-| Pensando | `prism-thinking` | `#A9DDFF` azul hielo muy claro (antes `#596D8C` Gris Pizarra Azulado, PMS 7545 C: se cambió el 18 nov 2026 porque se veía apagado) | DESJ prepara la respuesta | todo se acelera: el cerebro gira ~2× más rápido y las señales vuelan; las cuchillas del corazón laten rápido por turnos y respira más rápido |
+| Pensando | `prism-thinking` | `#8EE0FF` azul muy clarito, con las sombras del vidrio en azul (`border`) para que no se vea plateado (antes `#A9DDFF`, y en la propuesta original `#596D8C` Gris Pizarra Azulado, PMS 7545 C) | DESJ prepara la respuesta | todo se acelera: el cerebro gira ~2× más rápido y las señales vuelan; las cuchillas del corazón laten rápido por turnos y respira más rápido |
 | Respondiendo | `prism-responding` | `#64F4AC` Verde Menta Neón (PMS 3385 C; antes `#8EA4C8` Azul Acero Claro, cambiado el 18 nov 2026) | lee la respuesta en voz alta (o 1,5 s al llegar si la voz está apagada) | cuchillas apenas abiertas |
 | Alerta | `prism-alert` | `#FF2A54` Rojo Neón Alerta (PMS 1925 C) | pendientes atrasados | cuchillas abiertas y respiración rápida |
 
