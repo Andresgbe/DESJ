@@ -44,6 +44,18 @@ export async function askDesj(text: string, conversationId: string | null, mode:
     : askQueue(text, conversationId, mode, agenda, attachments);
 }
 
+/** Lo que ve la persona cuando DESJ falla por algo técnico (nunca el error en inglés ni códigos). */
+export const BUSY_MESSAGE = 'DESJ está ocupado y no puede responderte ahora. Intenta en un rato, cuando vuelva.';
+
+/**
+ * Error guardado por el worker → texto para la persona. Los errores técnicos (de la API, en inglés,
+ * con códigos) se cambian por BUSY_MESSAGE; los mensajes en español que ya son claros se dejan.
+ */
+export function friendlyError(error: string | null | undefined) {
+  if (!error) return BUSY_MESSAGE;
+  return /api error|failed|request|authenticat|timeout|error:|\b[45]\d\d\b/i.test(error) ? BUSY_MESSAGE : error;
+}
+
 const failure = (reply: string, conversationId: string | null): AskResult => ({
   reply,
   dataChanged: false,
@@ -103,7 +115,7 @@ async function askQueue(text: string, conversationId: string | null, mode: Mode,
     await new Promise((r) => setTimeout(r, QUEUE_POLL_MS));
     const { data: row } = await supabase.from('messages').select('status, error').eq('id', mine.id).single();
     if (!row) continue;
-    if (row.status === 'error') return failure(row.error ?? 'DESJ no pudo responder.', convId);
+    if (row.status === 'error') return failure(friendlyError(row.error), convId);
     if (row.status === 'done') {
       const answer = await findAnswer(mine.id, conv, mine.created_at);
       if (!answer) return failure('DESJ respondió pero no pude leer la respuesta. Abre la conversación de nuevo.', convId);
@@ -215,7 +227,7 @@ export async function retryQueue(onProgress?: (p: RetryProgress) => void): Promi
         if (answer) dataChanged = (await runActions(answer.content, (answer.actions as Actions | null) ?? null)).dataChanged || dataChanged;
       } else {
         progress.failed += 1;
-        if (s.error) progress.reason = s.error;
+        if (s.error) progress.reason = friendlyError(s.error);
       }
       if (!progress.conversationIds.includes(row.conversation_id)) progress.conversationIds.push(row.conversation_id);
       onProgress?.({ ...progress, conversationIds: [...progress.conversationIds] });

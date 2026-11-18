@@ -303,6 +303,7 @@ npx expo install <pkg> # instalar librerías (NUNCA npm install <pkg>)
 - Requisitos: Node 24, Claude Code de terminal con sesión iniciada (`irm https://claude.ai/install.ps1 | iex`, luego `claude`) y `desj-worker/.env` con la clave secreta de Supabase (copiar `.env.example`).
 - Arranque automático: `desj-worker\instalar-inicio.ps1` crea la tarea programada "DESJ worker", que corre `start-worker.bat` sin ventana al iniciar sesión en Windows y lo reinicia si se cae. Log: `desj-worker/worker.log`. Para quitarla: `instalar-inicio.ps1 -Quitar`.
 - Solo responde con el PC prendido, con la sesión iniciada y sin suspender.
+- Si Claude falla (sesión vencida, API caída, límite), la persona ve "DESJ está ocupado y no puede responderte ahora. Intenta en un rato, cuando vuelva." y el detalle técnico queda solo en `worker.log`. La app hace lo mismo con errores viejos guardados en inglés (`friendlyError` en `brain.ts`).
 - **NEXUS desde DESJ (11 nov 2026):** para la cuenta `DESJ_NEXUS_USER_ID` (solo Andrés) el worker suma el MCP de NEXUS (`career-os/mcp-server/index.js`, ruta cambiable con `DESJ_NEXUS_MCP`) y permite `mcp__nexus__*`; así "DESJ, agrega una tarea al tablero de Lorenzo Broker" funciona. Ese MCP entra con el login de Andrés en `career-os/mcp-server/.env` (anon key, RLS de NEXUS) y trae herramientas genéricas de ver/crear/editar/borrar (`crud.js`): contraseñas ocultas, borrar solo con confirmación. Steven y el cerebro `api` no lo tienen.
 
 ### Publicar la versión web instalable (iPhone gratis)

@@ -283,7 +283,9 @@ async function handle(msg) {
     ]);
     log('✓', msg.id.slice(0, 8), reply.slice(0, 60));
   } catch (e) {
-    await fail(msg, `DESJ no pudo responder: ${e instanceof Error ? e.message : String(e)}`);
+    // La persona ve un mensaje claro; el detalle técnico queda solo en el log (worker.log).
+    log('✗ detalle', msg.id.slice(0, 8), e instanceof Error ? e.message : String(e));
+    await fail(msg, 'DESJ está ocupado y no puede responderte ahora. Intenta en un rato, cuando vuelva.');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
