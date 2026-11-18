@@ -20,6 +20,7 @@ import { C, mono, S } from '@/theme';
 export function Screen({ module, children, scroll = true, wide = false, menu, back = false, overlay }: { module: string; children: ReactNode; scroll?: boolean; wide?: boolean; menu?: ReactNode; back?: boolean; overlay?: ReactNode }) {
   // Teléfono: columna de S.column. Computadora (ventana ≥ S.breakpoint): columna más ancha, S.columnDesk.
   const layout = useLayout();
+  const h = layout.header;
   const column = { maxWidth: wide ? S.columnWide : layout.column };
   const body = scroll ? (
     <ScrollView contentContainerStyle={[styles.content, column]} keyboardShouldPersistTaps="handled">
@@ -31,18 +32,19 @@ export function Screen({ module, children, scroll = true, wide = false, menu, ba
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <NeuralBackground />
-      <View style={[styles.header, column]}>
+      {/* En computadora el header va a todo lo ancho; en el teléfono, alineado con la columna. */}
+      <View style={[styles.header, layout.wide ? { maxWidth: '100%' } : column, { paddingHorizontal: h.padX, paddingTop: h.padY, paddingBottom: h.padY / 2 }]}>
         {back ? (
           <Pressable onPress={() => router.back()} hitSlop={10} style={styles.back} accessibilityRole="button" accessibilityLabel="Volver">
-            <IconBack color={C.accentSoft} size={20} />
-            <Text style={styles.brand}>DESJ</Text>
+            <IconBack color={C.accentSoft} size={h.icon} />
+            <Text style={[styles.brand, { fontSize: h.label + 1.5 }]}>DESJ</Text>
           </Pressable>
         ) : (
           // El menú (p. ej. la hamburguesa del Núcleo) va a la izquierda; sin menú, el lado queda vacío.
           <View>{menu}</View>
         )}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
-          <Label numberOfLines={1} style={{ flexShrink: 1 }}>{module}</Label>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: h.gap, flexShrink: 1 }}>
+          <Label numberOfLines={1} style={{ flexShrink: 1, fontSize: h.label, letterSpacing: h.labelSpacing }}>{module}</Label>
           <MotionToggle />
           <ProfileButton />
         </View>
@@ -56,17 +58,18 @@ export function Screen({ module, children, scroll = true, wide = false, menu, ba
 /** Interruptor de animaciones del header: en OFF el cerebro y la red de fondo quedan estáticos. */
 export function MotionToggle() {
   const { animations, setAnimations } = useMotion();
+  const { header: h } = useLayout();
   return (
     <Pressable
       onPress={() => setAnimations(!animations)}
       hitSlop={6}
-      style={styles.toggle}
+      style={[styles.toggle, { height: h.control, paddingHorizontal: h.control * 0.3, gap: h.dot }]}
       accessibilityRole="switch"
       accessibilityState={{ checked: animations }}
       accessibilityLabel="Animaciones"
       accessibilityHint={animations ? "Apágalas para que la app quede estática y consuma menos" : "Enciéndelas para que el cerebro vuelva a girar"}>
-      <View style={[styles.dot, { backgroundColor: animations ? C.accent : C.muted }]} />
-      <Text style={[styles.toggleText, { color: animations ? C.accentSoft : C.muted }]}>{animations ? 'Anim on' : 'Anim off'}</Text>
+      <View style={[styles.dot, { width: h.dot, height: h.dot, borderRadius: h.dot / 2, backgroundColor: animations ? C.accent : C.muted }]} />
+      <Text style={[styles.toggleText, { fontSize: h.toggleText, color: animations ? C.accentSoft : C.muted }]}>{animations ? 'Anim on' : 'Anim off'}</Text>
     </Pressable>
   );
 }

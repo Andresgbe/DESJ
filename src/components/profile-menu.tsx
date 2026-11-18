@@ -6,6 +6,7 @@ import Animated, { Easing, FadeIn, FadeOut } from 'react-native-reanimated';
 import Svg, { Circle, Path } from 'react-native-svg';
 
 import { useAuth } from '@/lib/auth';
+import { useLayout } from '@/lib/layout';
 import { C, mono } from '@/theme';
 
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
@@ -19,12 +20,14 @@ function initials(name: string, email?: string | null) {
 export function ProfileButton() {
   const { session, name, signOut } = useAuth();
   const [open, setOpen] = useState(false);
-  const [top, setTop] = useState(60);
+  const [pos, setPos] = useState({ top: 60, right: 16 });
   const btn = useRef<View>(null);
+  const { header: h, width } = useLayout();
   const letters = initials(name, session?.user.email);
 
   const show = () => {
-    btn.current?.measureInWindow((_x, y, _w, h) => setTop(y + h + 8));
+    // El menú se abre debajo del círculo, alineado con su borde derecho.
+    btn.current?.measureInWindow((x, y, w, bh) => setPos({ top: y + bh + 8, right: Math.max(16, width - x - w) }));
     setOpen(true);
   };
 
@@ -35,13 +38,13 @@ export function ProfileButton() {
 
   return (
     <>
-      <Pressable ref={btn} onPress={show} hitSlop={8} style={styles.avatar} accessibilityRole="button" accessibilityLabel="Abrir menú de perfil" accessibilityState={{ expanded: open }}>
-        {letters ? <Text style={styles.letters}>{letters}</Text> : <UserIcon />}
+      <Pressable ref={btn} onPress={show} hitSlop={8} style={[styles.avatar, { width: h.control, height: h.control, borderRadius: h.control / 2 }]} accessibilityRole="button" accessibilityLabel="Abrir menú de perfil" accessibilityState={{ expanded: open }}>
+        {letters ? <Text style={[styles.letters, { fontSize: h.avatarText }]}>{letters}</Text> : <UserIcon size={h.avatarIcon} />}
       </Pressable>
 
       <Modal visible={open} transparent animationType="none" onRequestClose={() => setOpen(false)}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} accessibilityLabel="Cerrar menú" />
-        <Animated.View entering={FadeIn.duration(160).easing(EASE_OUT)} exiting={FadeOut.duration(120)} style={[styles.menu, { top }]}>
+        <Animated.View entering={FadeIn.duration(160).easing(EASE_OUT)} exiting={FadeOut.duration(120)} style={[styles.menu, pos]}>
           <View style={styles.who}>
             <View style={[styles.avatar, styles.avatarBig]}>
               {letters ? <Text style={[styles.letters, { fontSize: 15 }]}>{letters}</Text> : <UserIcon />}
@@ -79,9 +82,9 @@ function MenuItem({ title, sub, danger, onPress }: { title: string; sub?: string
   );
 }
 
-function UserIcon() {
+function UserIcon({ size = 16 }: { size?: number }) {
   return (
-    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={C.accentSoft} strokeWidth={2} strokeLinecap="round">
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={C.accentSoft} strokeWidth={2} strokeLinecap="round">
       <Circle cx={12} cy={8} r={4} />
       <Path d="M4 21a8 8 0 0 1 16 0" />
     </Svg>
@@ -94,7 +97,6 @@ const styles = StyleSheet.create({
   letters: { color: C.accentText, fontFamily: mono, fontSize: 12, fontWeight: '700' },
   menu: {
     position: 'absolute',
-    right: 16,
     width: 260,
     backgroundColor: C.card,
     borderColor: C.border,

@@ -7,6 +7,7 @@ import Animated, { Easing, FadeIn, FadeOut } from 'react-native-reanimated';
 import { IconMenu } from '@/components/icons';
 import { Label } from '@/components/ui';
 import { useChats } from '@/lib/chats';
+import { useLayout } from '@/lib/layout';
 import { C } from '@/theme';
 
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
@@ -29,6 +30,7 @@ export function ChatMenu({
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 60, left: 16 });
   const btn = useRef<View>(null);
+  const { header: h } = useLayout();
   const title = conversations.find((c) => c.id === activeId)?.title ?? 'Nueva conversación';
 
   const show = () => {
@@ -45,8 +47,8 @@ export function ChatMenu({
 
   return (
     <>
-      <Pressable ref={btn} onPress={show} hitSlop={8} style={styles.btn} accessibilityRole="button" accessibilityLabel="Abrir menú de la conversación" accessibilityState={{ expanded: open }}>
-        <IconMenu color={C.accentSoft} size={20} />
+      <Pressable ref={btn} onPress={show} hitSlop={8} style={[styles.btn, { width: h.control, height: h.control, borderRadius: h.control * 0.3 }]} accessibilityRole="button" accessibilityLabel="Abrir menú de la conversación" accessibilityState={{ expanded: open }}>
+        <IconMenu color={C.accentSoft} size={h.icon} />
       </Pressable>
 
       <Modal visible={open} transparent animationType="none" onRequestClose={() => setOpen(false)}>
