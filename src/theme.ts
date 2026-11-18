@@ -63,6 +63,15 @@ export const NEURAL = [
   color('neural-calendario'),
 ];
 
+/** Color del prisma (logo y centro del cerebro) en cada estado de DESJ. Solo para el prisma y los íconos. */
+export const PRISM = {
+  online: color('prism-online'),
+  listening: color('prism-listening'),
+  thinking: color('prism-thinking'),
+  responding: color('prism-responding'),
+  alert: color('prism-alert'),
+};
+
 // Las familias del Design System son pilas CSS; en el teléfono se usa la fuente del sistema y Menlo.
 export const mono = Platform.select({ ios: 'Menlo', default: 'monospace' });
 

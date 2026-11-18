@@ -9,3 +9,8 @@
 - **Hace falta un token nuevo desde el código:** agrégalo aquí y en el Design System en la misma tarea, y luego en `src/theme.ts`.
 
 Si se borra o renombra un token que la app usa, la app avisa al arrancar (`theme.ts` lanza un error con el nombre que falta).
+
+## Logo (el Prisma)
+
+- `prisma/`: los 5 SVG originales del Prisma B, uno por estado (en línea, escuchando, pensando, respondiendo, alerta). Propuesta y paleta Pantone en `CONTEXTO.md` §9.
+- `logo.mjs`: las variantes del ícono (favicon, PWA, iPhone, splash, Android). La forma sale de `src/components/prism-shape.ts`, la misma que dibuja la app. Para regenerar los PNG: `node scripts/render-logo.mjs`.

@@ -1,7 +1,7 @@
 # DESJ — Contexto completo del proyecto
 
 > Documento vivo. Léelo antes de tocar el código (personas e IAs).
-> Última actualización: 2026-10-05.
+> Última actualización: 2026-11-18.
 
 ---
 
@@ -135,7 +135,9 @@ src/
     ajustes.tsx            ← cuenta, permisos, versión, cerrar sesión
   components/
     ui.tsx                 ← Screen (header con círculo de perfil), Card, Title, Label, Mono, Row, HudRing
-    desj-core.tsx          ← DesjCore: el cerebro + línea de estado (D·E·S·J · hora · estado)
+    desj-core.tsx          ← DesjCore: el cerebro con el prisma en el centro + línea de estado (D·E·S·J · hora · estado)
+    prism.tsx              ← Prism (logo animado con 5 estados, centro del cerebro) y PrismMark (logo quieto del header)
+    prism-shape.ts         ← forma del prisma como texto SVG (la usan la app y design/logo.mjs)
     brain-graph.ts         ← modelo del cerebro: genera la red 3D (grupos = módulos) y proyecta cada cuadro
     neural-core.tsx        ← dibujo del cerebro con Skia (teléfono) · neural-core.web.tsx ← con <canvas> (web)
     neural-bg.tsx          ← red 2D sutil de fondo de todas las pantallas
@@ -169,6 +171,8 @@ src/
 design/
   tokens.json              ← copia exacta de los tokens del Design System (https://claude.ai/artifact/7CsREDLrakrXsKvdy7WDVu)
   README.md                ← cómo sincronizar
+  logo.mjs                 ← variantes del ícono (Prisma); scripts/render-logo.mjs genera los PNG
+  prisma/                  ← los 5 SVG originales del Prisma (uno por estado)
 ```
 
 Fase 1 (código listo, falta desplegar):
@@ -192,9 +196,26 @@ supabase/functions/chat/   ← Edge Function: contexto del usuario + Claude con 
 
 **Fuente oficial: el Design System de DESJ** (https://claude.ai/artifact/7CsREDLrakrXsKvdy7WDVu). La app lee sus tokens desde `design/tokens.json`. La tabla de abajo es un resumen.
 
-Inspirada en el carrusel de Adrián y en los grafos tipo "Jarvis": fondo casi negro azulado, el **cerebro** (una red neuronal 3D grande que gira, con un grupo de nodos por módulo, conexiones, señales que viajan y una esfera de alambre en el centro), etiquetas en mayúsculas monoespaciadas ("MÓDULO 04 · SALUD") y una palabra del título resaltada en azul.
+Inspirada en el carrusel de Adrián y en los grafos tipo "Jarvis": fondo casi negro azulado, el **cerebro** (una red neuronal 3D grande que gira, con un grupo de nodos por módulo, conexiones, señales que viajan y el **Prisma**, el logo, en el centro), etiquetas en mayúsculas monoespaciadas ("MÓDULO 04 · SALUD") y una palabra del título resaltada en azul.
 
 **Decisión (18 oct 2026):** el HUD de anillos concéntricos se reemplazó por el cerebro. Se dibuja con `@shopify/react-native-skia` en el teléfono (viene en Expo Go) y con `<canvas>` en web. Cuando DESJ piensa, el cerebro acelera, salen más señales y el núcleo brilla más.
+
+**Logo: el Prisma (18 nov 2026).** El logo de DESJ es el **Prisma Interconectado, versión B**: tres cuchillas de vidrio biselado que forman un triángulo, repetidas cada 120°, con un triángulo punteado y un nodo en el centro. Se diseñó con Gemini: https://gemini.google.com/share/a6e977fe4c45?social_preview=true&skid=b4415182-9fcf-44bd-9474-36238675a063 (propuesta "Vista Maestra A+B+C"). Los 5 SVG originales están en `design/prisma/` (`online`, `listening`, `thinking`, `responding`, `alert`).
+- **Dónde va:** en el centro del cerebro (reemplazó a la esfera de alambre; los nodos del cerebro siguen igual), en el header junto a "DESJ" (`PrismMark`, quieto) y como ícono: favicon, ícono de la web instalable (PWA), ícono del iPhone y splash. Del logo completo se usa solo el triángulo dentro del cerebro; los anillos y los 4 puntos que lo rodean van solo en el ícono.
+- **Código:** la forma está en `src/components/prism-shape.ts` (texto SVG puro, sin React Native) y la usan la app (`prism.tsx`) y los íconos (`design/logo.mjs`). Los colores salen de los tokens `prism-*`; las luces y sombras de cada estado se calculan mezclando su color con blanco y con el fondo.
+- **Estados** (cambian el color del prisma y la línea de estado bajo el cerebro):
+
+| Estado | Token | Color (Pantone) | Cuándo | Movimiento |
+|---|---|---|---|---|
+| En línea | `prism-online` | `#3993F5` Azul Eléctrico (PMS 2727 C) | reposo | respira despacio |
+| Escuchando | `prism-listening` | `#45B6FE` Cian Holográfico (PMS 2985 C) | dictado por voz activo | cuchillas un poco abiertas |
+| Pensando | `prism-thinking` | `#596D8C` Gris Pizarra Azulado (PMS 7545 C) | DESJ prepara la respuesta | cuchillas laten por turnos; el cerebro acelera |
+| Respondiendo | `prism-responding` | `#8EA4C8` Azul Acero Claro (PMS 5425 C) | lee la respuesta en voz alta (o 1,5 s al llegar si la voz está apagada) | cuchillas apenas abiertas |
+| Alerta | `prism-alert` | `#FF2A54` Rojo Neón Alerta (PMS 1925 C) | pendientes atrasados | cuchillas abiertas y respiración rápida |
+
+  [pendiente] conectar **Alerta** a los pendientes atrasados: el componente ya la soporta, pero hoy el Núcleo solo usa En línea, Escuchando, Pensando y Respondiendo.
+- **Resto de la paleta de la propuesta (referencia, no son tokens):** Abismo Nocturno `#040811` (PMS 296 C, fondo), Pizarra HUD `#0A1224` (PMS 282 C, tarjetas), Verde Menta Neón `#64F4AC` (PMS 3385 C, salud y biométricos), Rojo Carmesí Vencido `#C8102E` (PMS 186 C, notificaciones pasadas y bordes de alerta). La app sigue con sus fondos `bg`/`card` y su verde `ok`; si se quiere adoptar alguno, primero se agrega como token.
+- **Regenerar los íconos** después de cambiar el logo: `node scripts/render-logo.mjs` (con Playwright) o `node scripts/render-logo.mjs <ruta a puppeteer-core>` (Chrome en Windows). Necesita Node 22.18 o más nuevo.
 
 **Núcleo (18 oct 2026):** sin saludo ni fecha. Al entrar solo se ve DESJ grande y centrado con el botón **HABLAR CON DESJ**; al tocarlo el cerebro se achica y sube (450 ms) y aparece la conversación. Historial, conversación nueva, voz y "Volver a DESJ" están en el menú hamburguesa del header.
 
@@ -288,7 +309,7 @@ npm run deploy:web         # exporta a dist/ y publica en producción (EAS Hosti
 ```
 
 - Necesita el `.env` con Supabase: las variables `EXPO_PUBLIC_` quedan dentro del sitio al exportar. El script exporta con `--clear` (Metro guarda esas variables en caché) y corre `scripts/web-index-routes.mjs`, que copia `yo/index.html` como `yo.html`: sin eso, recargar `/yo` o `/modulos` da 404 en EAS Hosting.
-- `src/app/+html.tsx` pone las etiquetas de iOS (pantalla completa, ícono, nombre) y enlaza `public/manifest.json`; los íconos están en `public/`. Hoy son el ícono genérico de Expo: [pendiente] ícono propio de DESJ.
+- `src/app/+html.tsx` pone las etiquetas de iOS (pantalla completa, ícono, nombre) y enlaza `public/manifest.json`; los íconos están en `public/`. Son el **Prisma** (ver §9), generados con `scripts/render-logo.mjs`.
 - En el iPhone: abrir la URL en **Safari** → Compartir → "Agregar a pantalla de inicio".
 
 ### Conectar la nube (una vez)
@@ -314,6 +335,7 @@ npm run deploy:web         # exporta a dist/ y publica en producción (EAS Hosti
 
 - Documento de concepto: https://claude.ai/code/artifact/cfc073d2-84f4-4bbc-a24f-b3d96cb515ba
 - Mockups (app, web y propuestas de salud): https://claude.ai/artifact/USELQwhxi7JreX7RcAGWJX
+- Logo Prisma B y paleta Pantone (propuesta en Gemini): https://gemini.google.com/share/a6e977fe4c45?social_preview=true&skid=b4415182-9fcf-44bd-9474-36238675a063
 - Referencia: @adrian.alvarezl en Instagram (carrusel "JARVIS").
 
 **Calendario Semana/Día y archivos en mosaico (25 oct 2026):** la pestaña Calendario tiene vistas Mes, Semana y Día; en Semana y Día los eventos se ubican por hora (los que se pisan van en columnas), los de todo el día arriba, y una línea marca la hora actual. Tocar un espacio vacío abre Agregar con esa hora; tocar el día en la cabecera abre la vista Día. En Salud, los archivos de un registro se ven como mosaicos pequeños (2 por fila en el teléfono, 3 o 4 en pantallas anchas); la foto en grande solo se abre con "Ampliar" (visor dentro de la app; los PDF se abren en el visor del teléfono o del navegador).

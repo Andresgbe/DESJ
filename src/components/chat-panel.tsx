@@ -15,13 +15,24 @@ import { ChatMsg, useChats } from '@/lib/chats';
 import { dictationAvailable, startDictation } from '@/lib/dictation';
 import { C, R } from '@/theme';
 
-/** `voice`: leer en voz alta las respuestas (se cambia desde el menú hamburguesa). */
-export function ChatPanel({ voice }: { voice: boolean }) {
+/** Lo que hace la conversación en este momento (el prisma del Núcleo cambia de color con esto). */
+export type ChatActivity = 'listening' | 'responding' | null;
+
+/** Cuánto dura el estado "respondiendo" cuando la respuesta no se lee en voz alta. */
+const REPLY_FLASH = 1500;
+
+/**
+ * `voice`: leer en voz alta las respuestas (se cambia desde el menú hamburguesa).
+ * `onActivity`: avisa si DESJ te está escuchando (dictado) o respondiendo (leyendo la respuesta).
+ */
+export function ChatPanel({ voice, onActivity }: { voice: boolean; onActivity?: (a: ChatActivity) => void }) {
   const { messages, busy, send } = useChats();
   const [input, setInput] = useState('');
   const [files, setFiles] = useState<Attachment[]>([]);
   const [tray, setTray] = useState(false);
   const [listening, setListening] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const flash = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopListening = useRef<(() => void) | null>(null);
   const list = useRef<FlatList<ChatMsg>>(null);
   const field = useRef<TextInput>(null);
@@ -38,6 +49,19 @@ export function ChatPanel({ voice }: { voice: boolean }) {
   }, [input]);
 
   const canSend = Boolean(input.trim() || files.length);
+
+  useEffect(() => {
+    onActivity?.(listening ? 'listening' : speaking ? 'responding' : null);
+  }, [listening, speaking, onActivity]);
+
+  // Al cerrar la conversación el prisma vuelve a reposo.
+  useEffect(
+    () => () => {
+      if (flash.current) clearTimeout(flash.current);
+      onActivity?.(null);
+    },
+    [onActivity],
+  );
 
   // Teclado de computadora: Enter envía y Shift+Enter baja a otra línea. En el iPhone la tecla de
   // retorno siempre baja de línea y se envía con el botón, como en las apps de mensajes.
@@ -61,7 +85,16 @@ export function ChatPanel({ voice }: { voice: boolean }) {
     setFiles([]);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const reply = await send(text, sending);
-    if (reply && voice) Speech.speak(reply, { language: 'es-ES', rate: 1.0 });
+    if (!reply) return;
+    if (flash.current) clearTimeout(flash.current);
+    setSpeaking(true);
+    if (voice) {
+      // Al cortar la lectura (Speech.stop: voz apagada, dictado, cerrar el chat) también vuelve a reposo.
+      const done = () => setSpeaking(false);
+      Speech.speak(reply, { language: 'es-ES', rate: 1.0, onDone: done, onStopped: done, onError: done });
+    } else {
+      flash.current = setTimeout(() => setSpeaking(false), REPLY_FLASH);
+    }
   };
 
   const attach = async (source: 'galeria' | 'camara' | 'archivo') => {

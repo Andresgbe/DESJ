@@ -1,5 +1,5 @@
-// Modelo del cerebro de DESJ: una red neuronal 3D (nodos agrupados por módulo, conexiones y una
-// esfera de alambre en el centro). Se genera una sola vez con semilla fija, así sale igual siempre.
+// Modelo del cerebro de DESJ: una red neuronal 3D (nodos agrupados por módulo y conexiones). En el
+// centro va el Prisma (prism.tsx), dibujado encima del lienzo. Se genera una sola vez con semilla fija, así sale igual siempre.
 // `computeFrame` proyecta la red girada en 2D para un cuadro; es un worklet para que en el teléfono
 // corra en el hilo de UI (Skia) y en web se llama desde requestAnimationFrame (canvas).
 
@@ -31,9 +31,6 @@ export type Graph = {
   edges: number[];
   /** Señales que viajan: [conexión, desfase 0–1, velocidad]. */
   signals: number[];
-  /** Esfera del centro (icosaedro subdividido): vértices xyz seguidos y aristas en pares. */
-  coreV: number[];
-  coreE: number[];
 };
 
 /** Aleatorio con semilla (mulberry32). */
@@ -54,7 +51,7 @@ function normalize(v: number[]) {
 export function buildGraph(n = 1500, seed = 11): Graph {
   const rand = seeded(seed);
   const gauss = () => (rand() + rand() + rand() - 1.5) / 1.5;
-  const g: Graph = { n: 0, x: [], y: [], z: [], c: [], big: [], hubs: [], edges: [], signals: [], coreV: [], coreE: [] };
+  const g: Graph = { n: 0, x: [], y: [], z: [], c: [], big: [], hubs: [], edges: [], signals: [] };
   const push = (p: number[], c: number, big: number) => {
     g.x.push(p[0]);
     g.y.push(p[1]);
@@ -132,49 +129,7 @@ export function buildGraph(n = 1500, seed = 11): Graph {
   const edgeCount = g.edges.length / 2;
   for (let i = 0; i < 72; i++) g.signals.push(Math.floor(rand() * edgeCount), rand(), 0.35 + rand() * 0.5);
 
-  buildCore(g);
   return g;
-}
-
-/** Icosaedro subdividido una vez: 42 vértices y 120 aristas, como una esfera geodésica. */
-function buildCore(g: Graph) {
-  const t = (1 + Math.sqrt(5)) / 2;
-  const v: number[][] = [
-    [-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0],
-    [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t],
-    [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1],
-  ].map(normalize);
-  const near = (a: number[], b: number[]) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) < 1.1;
-  const faces: number[][] = [];
-  for (let a = 0; a < 12; a++)
-    for (let b = a + 1; b < 12; b++)
-      for (let c = b + 1; c < 12; c++) if (near(v[a], v[b]) && near(v[b], v[c]) && near(v[a], v[c])) faces.push([a, b, c]);
-
-  const mids = new Map<string, number>();
-  const mid = (a: number, b: number) => {
-    const key = a < b ? `${a}-${b}` : `${b}-${a}`;
-    let i = mids.get(key);
-    if (i === undefined) {
-      i = v.push(normalize([(v[a][0] + v[b][0]) / 2, (v[a][1] + v[b][1]) / 2, (v[a][2] + v[b][2]) / 2])) - 1;
-      mids.set(key, i);
-    }
-    return i;
-  };
-  const seen = new Set<string>();
-  const edge = (a: number, b: number) => {
-    const key = a < b ? `${a}-${b}` : `${b}-${a}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      g.coreE.push(a, b);
-    }
-  };
-  for (const [a, b, c] of faces) {
-    const ab = mid(a, b);
-    const bc = mid(b, c);
-    const ca = mid(c, a);
-    for (const [p, q] of [[a, ab], [ab, b], [b, bc], [bc, c], [c, ca], [ca, a], [ab, bc], [bc, ca], [ca, ab]]) edge(p, q);
-  }
-  for (const p of v) g.coreV.push(p[0], p[1], p[2]);
 }
 
 export type Pt = { x: number; y: number };
@@ -188,8 +143,6 @@ export type Frame = {
   hubs: Hub[];
   /** Señales que viajan por las conexiones, por grupo. */
   signals: Pt[][];
-  /** Aristas de la esfera central (pares de puntos). */
-  core: Pt[];
   /** Escala de dibujo según el tamaño (1 = 320 px). */
   k: number;
 };
@@ -200,7 +153,7 @@ export const DEPTHS = 3;
  * Proyecta la red para un cuadro.
  * @param angle giro alrededor del eje vertical (radianes)
  * @param time segundos desde que empezó (mueve señales y núcleo)
- * @param energy 0 en reposo, 1 cuando DESJ piensa: más señales y núcleo más vivo
+ * @param energy 0 en reposo, 1 cuando DESJ piensa: más señales y más rápidas
  */
 export function computeFrame(g: Graph, size: number, angle: number, time: number, energy: number): Frame {
   'worklet';
@@ -267,22 +220,7 @@ export function computeFrame(g: Graph, size: number, angle: number, time: number
     signals[g.c[a]].push({ x: px[a] + (px[b] - px[a]) * t, y: py[a] + (py[b] - py[a]) * t });
   }
 
-  // Esfera central: gira por su cuenta, más rápido y con un leve latido al pensar.
-  const coreR = scale * (0.15 + 0.012 * Math.sin(time * (1.6 + energy * 3)) + energy * 0.02);
-  const cA = time * (0.35 + energy * 0.9);
-  const cc = Math.cos(cA);
-  const cs = Math.sin(cA);
-  const cv: Pt[] = [];
-  for (let i = 0; i < g.coreV.length; i += 3) {
-    const x1 = g.coreV[i] * cc + g.coreV[i + 2] * cs;
-    const z1 = -g.coreV[i] * cs + g.coreV[i + 2] * cc;
-    const y2 = g.coreV[i + 1] * ct - z1 * st;
-    cv.push({ x: half + x1 * coreR, y: half + y2 * coreR });
-  }
-  const core: Pt[] = [];
-  for (let e = 0; e < g.coreE.length; e += 2) core.push(cv[g.coreE[e]], cv[g.coreE[e + 1]]);
-
-  return { nodes, edges, hubs, signals, core, k };
+  return { nodes, edges, hubs, signals, k };
 }
 
 /** Estilo de cada capa de nodos: radio en px (antes de `k`) y opacidad, por profundidad y tamaño. */

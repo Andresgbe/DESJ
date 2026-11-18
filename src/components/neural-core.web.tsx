@@ -78,11 +78,6 @@ function draw(ctx: CanvasRenderingContext2D, size: number, f: Frame, energy: num
     dots(ctx, f.signals[c], 0.9 * f.k);
   }
 
-  ctx.strokeStyle = C.neuralCore;
-  ctx.globalAlpha = 0.5 + energy * 0.4;
-  ctx.lineWidth = 0.8 * f.k;
-  lines(ctx, f.core);
-
   ctx.font = `${Math.round(9 * Math.max(1, size / 320))}px ${MONO}`;
   ctx.textAlign = 'center';
   for (const h of f.hubs) {

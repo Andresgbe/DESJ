@@ -33,7 +33,6 @@ export type NeuralCoreProps = { size: number; thinking?: boolean; labels?: boole
 const STEP = 1 / 30 - 0.002; // segundos entre cuadros (con margen para no saltarse uno de cada dos)
 
 const COLORS = NEURAL.map((c) => Skia.Color(c));
-const CORE = Skia.Color(C.neuralCore);
 const TEXT = Skia.Color(C.text);
 
 function draw(canvas: SkCanvas, f: Frame, energy: number, font: SkFont | null, widths: number[]) {
@@ -88,12 +87,6 @@ function draw(canvas: SkCanvas, f: Frame, energy: number, font: SkFont | null, w
     paint.setStrokeWidth(1.8 * f.k);
     canvas.drawPoints(PointMode.Points, pts, paint);
   }
-
-  // Esfera de alambre del centro.
-  paint.setColor(CORE);
-  paint.setAlphaf(0.5 + energy * 0.4);
-  paint.setStrokeWidth(0.8 * f.k);
-  canvas.drawPoints(PointMode.Lines, f.core, paint);
 
   // Nodos principales: brillo difuso, punto sólido y su nombre.
   const fill = Skia.Paint();

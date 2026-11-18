@@ -7,6 +7,7 @@ import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg';
 
 import { IconBack } from '@/components/icons';
 import { NeuralBackground } from '@/components/neural-bg';
+import { PrismMark } from '@/components/prism';
 import { ProfileButton } from '@/components/profile-menu';
 import { useLayout } from '@/lib/layout';
 import { useMotion } from '@/lib/motion';
@@ -38,7 +39,10 @@ export function Screen({ module, children, scroll = true, wide = false, menu, ba
             <Text style={styles.brand}>DESJ</Text>
           </Pressable>
         ) : (
-          <Text style={styles.brand}>● DESJ</Text>
+          <View style={styles.brandRow} accessibilityRole="header" accessibilityLabel="DESJ">
+            <PrismMark size={22} />
+            <Text style={styles.brand}>DESJ</Text>
+          </View>
         )}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
           <Label numberOfLines={1} style={{ flexShrink: 1 }}>{module}</Label>
@@ -153,6 +157,7 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
     ...WIDE,
   },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   brand: { fontFamily: mono, fontSize: 12, letterSpacing: 3, color: C.accentSoft },
   content: { padding: S.pad, gap: S.gap, paddingBottom: 40, ...WIDE },
   title: { fontSize: 30, fontWeight: '800', color: C.text, letterSpacing: -0.5 },

@@ -11,7 +11,7 @@ import Animated, { FadeIn, FadeInDown, FadeOut, useAnimatedStyle, useSharedValue
 
 import { ChatHistory } from '@/components/chat-history';
 import { ChatMenu } from '@/components/chat-menu';
-import { ChatPanel } from '@/components/chat-panel';
+import { ChatActivity, ChatPanel } from '@/components/chat-panel';
 import { DesjCore, RESIZE, STATUS_HEIGHT } from '@/components/desj-core';
 import { IconCalendar, IconClock, IconPlus } from '@/components/icons';
 import { Screen } from '@/components/ui';
@@ -36,6 +36,7 @@ export default function Nucleo() {
   const [history, setHistory] = useState(false);
   const [area, setArea] = useState(0);
   const [pressed, setPressed] = useState(false);
+  const [activity, setActivity] = useState<ChatActivity>(null);
   // Las pestañas quedan montadas: el cerebro se pausa cuando el Núcleo no está a la vista.
   const [focused, setFocused] = useState(true);
   useFocusEffect(
@@ -109,7 +110,7 @@ export default function Nucleo() {
         keyboardVerticalOffset={90}
         onLayout={(e) => setArea(e.nativeEvent.layout.height)}>
         <Animated.View style={[{ alignItems: 'center' }, liftStyle]}>
-          <DesjCore size={big} display={display} thinking={thinking} active={focused} label={thinking ? 'PENSANDO…' : 'SISTEMA EN LÍNEA'} />
+          <DesjCore size={big} display={display} state={thinking ? 'thinking' : (activity ?? 'online')} active={focused} />
           {!talking ? (
             <Animated.View entering={FadeIn.duration(250)} exiting={FadeOut.duration(150)} style={{ marginTop: TALK_GAP }}>
               <AnimatedPressable
@@ -140,7 +141,7 @@ export default function Nucleo() {
                 <ChatAction icon={<IconPlus color={C.accentSoft} size={16} />} label="Nueva" hint={thinking ? 'Espera a que DESJ termine' : 'Empieza una conversación desde cero'} disabled={thinking} onPress={newChat} />
               </View>
             </View>
-            <ChatPanel voice={voice} />
+            <ChatPanel voice={voice} onActivity={setActivity} />
           </Animated.View>
         ) : null}
       </KeyboardAvoidingView>

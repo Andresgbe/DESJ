@@ -1,78 +1,61 @@
-// Logo de DESJ: una "D" luminosa sobre fondo HUD azul (colores de design/tokens.json).
-// Exporta el SVG en sus variantes; scripts/render-logo.mjs lo convierte en los PNG de la app.
-//   full: ícono completo (fondo + red + anillo + D)          → icon, apple-touch-icon, PWA, favicon
-//   mark: solo la D con su resplandor, fondo transparente    → splash, Android foreground
-//   bg:   solo el fondo                                      → Android background
-//   mono: la D en blanco plano                               → Android monochrome
-export const COLORS = {
-  bg: '#03070f',
-  card: '#08132a',
-  border: '#2763b8',
-  accent: '#2f9bff',
-  accentSoft: '#8fd0ff',
-  accentText: '#5cc2ff',
-  core: '#8fe8ff',
-};
-const c = COLORS;
+// Logo de DESJ: el Prisma (versión B, estado En línea) sobre fondo HUD. La forma sale de
+// src/components/prism-shape.ts (la misma que dibuja la app) y los colores de design/tokens.json.
+// scripts/render-logo.mjs convierte estas variantes en los PNG de la app:
+//   full:    ícono cuadrado (fondo + anillos + prisma)      → icon (iPhone), apple-touch-icon, PWA
+//   favicon: esquinas redondeadas, prisma más grande        → favicon de la web
+//   mark:    solo el prisma con su resplandor, sin fondo    → splash, Android foreground
+//   bg:      solo el fondo                                  → Android background
+//   mono:    el prisma en blanco plano                      → Android monochrome
+// Los 5 estados originales (en línea, escuchando, pensando, respondiendo, alerta) están en design/prisma/.
+import fs from 'node:fs';
 
-// La D: barra vertical + medio círculo, centrada en el lienzo de 1024.
-const D_PATH = 'M 331 300 V 724 H 471 A 212 212 0 0 0 471 300 Z';
+import { mix, prismAura, prismBody, prismPalette } from '../src/components/prism-shape.ts';
 
-// Red de nodos tenue (como NeuralBackground), en las esquinas para no competir con la D.
-const NODES = [
-  [96, 150], [210, 92], [300, 196], [150, 300], [820, 120], [930, 236], [860, 330], [742, 210],
-  [110, 760], [214, 900], [320, 820], [80, 640], [900, 790], [800, 914], [940, 660], [700, 860],
-];
-const EDGES = [
-  [0, 1], [1, 2], [0, 3], [2, 3], [4, 5], [5, 6], [4, 7], [6, 7], [8, 9], [9, 10], [8, 11], [10, 8],
-  [12, 13], [13, 15], [12, 14], [15, 12],
-];
+const tokens = JSON.parse(fs.readFileSync(new URL('./tokens.json', import.meta.url), 'utf8'));
+const token = (name) => tokens.color.tokens.find((t) => t.name === name).value;
 
-function background() {
-  const lines = EDGES.map(([a, b]) => `<line x1="${NODES[a][0]}" y1="${NODES[a][1]}" x2="${NODES[b][0]}" y2="${NODES[b][1]}" />`).join('');
-  const dots = NODES.map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${i % 3 === 0 ? 6 : 4}" />`).join('');
-  return `
-    <rect width="1024" height="1024" fill="${c.bg}" />
-    <rect width="1024" height="1024" fill="url(#glow)" />
-    <g stroke="${c.accent}" stroke-opacity="0.22" stroke-width="2">${lines}</g>
-    <g fill="${c.accentSoft}" fill-opacity="0.5">${dots}</g>
-    <!-- Anillos HUD -->
-    <circle cx="512" cy="512" r="400" fill="none" stroke="${c.border}" stroke-opacity="0.55" stroke-width="3" />
-    <circle cx="512" cy="512" r="360" fill="none" stroke="${c.border}" stroke-opacity="0.45" stroke-width="2" stroke-dasharray="6 14" />
-    <path d="M 512 112 A 400 400 0 0 1 858 312" fill="none" stroke="${c.accent}" stroke-width="10" stroke-linecap="round" />
-    <path d="M 254 818 A 400 400 0 0 1 150 680" fill="none" stroke="${c.accentSoft}" stroke-width="6" stroke-linecap="round" />`;
-}
+const BG = token('bg');
+const MAIN = token('prism-online');
+const SPARK = token('neural-salud'); // nodo superior del anillo, como en el original
+const WHITE = '#ffffff';
+const palette = prismPalette(MAIN, BG);
 
-function mark() {
-  return `
-    <path d="${D_PATH}" fill="none" stroke="${c.accent}" stroke-width="96" stroke-linejoin="round" opacity="0.55" filter="url(#blur)" />
-    <path d="${D_PATH}" fill="none" stroke="url(#stroke)" stroke-width="64" stroke-linejoin="round" />
-    <path d="${D_PATH}" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="10" stroke-linejoin="round" />
-    <!-- Núcleo: un nodo encendido dentro de la D -->
-    <circle cx="500" cy="512" r="34" fill="${c.core}" opacity="0.35" filter="url(#blur)" />
-    <circle cx="500" cy="512" r="16" fill="${c.core}" />`;
-}
+// El prisma va un poco más abajo del centro para que el triángulo se vea centrado.
+const CX = 512;
+const CY = 548;
 
 const DEFS = `
   <defs>
-    <radialGradient id="glow" cx="50%" cy="46%" r="75%">
-      <stop offset="0" stop-color="${c.accent}" stop-opacity="0.55" />
-      <stop offset="0.45" stop-color="${c.border}" stop-opacity="0.45" />
-      <stop offset="1" stop-color="${c.card}" stop-opacity="0.9" />
+    <radialGradient id="bg" cx="50%" cy="52%" r="70%">
+      <stop offset="0%" stop-color="${mix(MAIN, BG, 0.8)}"/>
+      <stop offset="60%" stop-color="${BG}"/>
+      <stop offset="100%" stop-color="${mix(BG, '#000000', 0.4)}"/>
     </radialGradient>
-    <linearGradient id="stroke" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="${c.core}" />
-      <stop offset="0.55" stop-color="${c.accentText}" />
-      <stop offset="1" stop-color="${c.accent}" />
-    </linearGradient>
-    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="22" /></filter>
   </defs>`;
 
+function rings() {
+  return `
+    <g transform="translate(${CX} ${CY})">
+      <circle r="420" fill="none" stroke="${mix(MAIN, BG, 0.45)}" stroke-width="2" stroke-opacity="0.45"/>
+      <circle r="390" fill="none" stroke="${MAIN}" stroke-width="3" stroke-opacity="0.8" stroke-dasharray="220 42 90 42"/>
+      <circle r="342" fill="none" stroke="${mix(MAIN, WHITE, 0.2)}" stroke-width="8" stroke-opacity="0.55" stroke-dasharray="3 16"/>
+      <circle cx="-314" r="8" fill="${mix(MAIN, WHITE, 0.4)}"/>
+      <circle cx="314" r="8" fill="${mix(MAIN, WHITE, 0.4)}"/>
+      <circle cy="314" r="8" fill="${mix(MAIN, WHITE, 0.4)}"/>
+      <circle cy="-314" r="7" fill="${SPARK}"/>
+    </g>`;
+}
+
+const prism = (scale = 1, aura = true) =>
+  `<g transform="translate(${CX} ${CY}) scale(${scale})">${aura ? prismAura(palette, 'l') : ''}${prismBody(palette, 'l')}</g>`;
+
 const svg = (body) => `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">${DEFS}${body}</svg>`;
+const background = (rx = 0) => `<rect width="1024" height="1024" rx="${rx}" fill="url(#bg)"/>`;
 
 export const LOGO = {
-  full: svg(background() + mark()),
-  mark: svg(mark()),
+  full: svg(background() + rings() + prism()),
+  favicon: svg(background(224) + prism(1.3)),
+  mark: svg(prism(0.85)),
   bg: svg(background()),
-  mono: svg(`<path d="${D_PATH}" fill="none" stroke="#ffffff" stroke-width="64" stroke-linejoin="round" />`),
+  mono: svg(`<g transform="translate(${CX} ${CY}) scale(0.85)">${prismBody(prismPalette(WHITE, WHITE), 'm')}</g>`),
 };
