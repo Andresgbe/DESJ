@@ -100,14 +100,15 @@ export function prismInner(p: PrismPalette) {
 }
 
 /**
- * Anillo que rodea al corazón dentro del cerebro: un disco oscuro (atenúa los nodos de atrás para que
- * el corazón se lea), un círculo fino y otro punteado por dentro. `dark` es el color del fondo.
+ * Anillo que rodea al corazón dentro del cerebro, fino y translúcido: un velo oscuro muy leve, dos
+ * círculos finos y uno punteado por dentro. `dark` es el color del fondo.
  */
 export function prismRing(p: PrismPalette, dark: string) {
   return (
-    `<circle r="430" fill="${dark}" fill-opacity="0.6"/>` +
-    `<circle r="430" fill="none" stroke="${p.main}" stroke-width="5" stroke-opacity="0.9"/>` +
-    `<circle r="400" fill="none" stroke="${p.highlight}" stroke-width="7" stroke-opacity="0.5" stroke-dasharray="3 16"/>`
+    `<circle r="440" fill="${dark}" fill-opacity="0.28"/>` +
+    `<circle r="440" fill="none" stroke="${p.main}" stroke-width="3.5" stroke-opacity="0.7"/>` +
+    `<circle r="408" fill="none" stroke="${p.main}" stroke-width="2.5" stroke-opacity="0.4"/>` +
+    `<circle r="382" fill="none" stroke="${p.highlight}" stroke-width="5" stroke-opacity="0.5" stroke-dasharray="2 14"/>`
   );
 }
 

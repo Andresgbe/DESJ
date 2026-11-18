@@ -79,11 +79,12 @@ export function buildGraph(n = 1200, seed = 11): Graph {
     }
   });
 
-  // Interior: nodos sueltos entre la cáscara y el núcleo.
+  // Interior: nodos sueltos entre la cáscara y el núcleo, un poco apartados del centro para dejarle
+  // espacio al Corazón de DESJ.
   const inner = n - g.x.length;
   for (let i = 0; i < inner; i++) {
     const p = normalize([gauss(), gauss(), gauss()]);
-    const r = 0.25 + 0.45 * rand();
+    const r = 0.38 + 0.37 * rand();
     push([p[0] * r, p[1] * r, p[2] * r], Math.floor(rand() * CLUSTERS.length), rand() < 0.1 ? 1 : 0);
   }
   g.n = g.x.length;
