@@ -1,25 +1,21 @@
 // Pantalla 01 · Núcleo. Al entrar solo está DESJ: el cerebro grande y centrado con el botón
 // "Hablar con DESJ". Al tocarlo, el cerebro se achica y sube, y aparece la conversación.
-// Con la conversación abierta, Historial y Nueva quedan a la vista arriba a la derecha; el menú hamburguesa
-// repite esas acciones y suma la respuesta en voz y "Volver a DESJ".
+// Historial, conversación nueva, respuesta en voz y "Volver a DESJ" viven en el menú hamburguesa (izquierda del header).
 import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
 import { useFocusEffect } from 'expo-router';
-import { ReactNode, useCallback, useEffect, useState } from 'react';
-import { Keyboard, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Keyboard, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { ChatHistory } from '@/components/chat-history';
 import { ChatMenu } from '@/components/chat-menu';
 import { ChatActivity, ChatPanel } from '@/components/chat-panel';
 import { DesjCore, RESIZE, STATUS_HEIGHT } from '@/components/desj-core';
-import { IconCalendar, IconClock, IconPlus } from '@/components/icons';
 import { Screen } from '@/components/ui';
-import { AgendaItem, getTodayAgenda } from '@/lib/calendar';
 import { useChats } from '@/lib/chats';
 import { useLayout } from '@/lib/layout';
-import { hhmm } from '@/lib/store';
-import { C, mono, R, S } from '@/theme';
+import { C, mono, S } from '@/theme';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -28,8 +24,7 @@ const TALK_GAP = 28; // entre el cerebro y el botón
 const TALK_HEIGHT = 52;
 
 export default function Nucleo() {
-  const { busy: thinking, newChat } = useChats();
-  const [agenda, setAgenda] = useState<AgendaItem[] | null | undefined>(undefined);
+  const { busy: thinking } = useChats();
   const [talking, setTalking] = useState(false);
   const [typing, setTyping] = useState(false);
   const [voice, setVoice] = useState(true);
@@ -62,10 +57,6 @@ export default function Nucleo() {
   }, [talking, idleOffset, lift]);
   const liftStyle = useAnimatedStyle(() => ({ transform: [{ translateY: lift.get() }] }));
 
-  useEffect(() => {
-    getTodayAgenda().then(setAgenda).catch(() => setAgenda(null));
-  }, []);
-
   // Con el teclado abierto el cerebro se achica para dejarle espacio a la conversación.
   useEffect(() => {
     const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setTyping(true));
@@ -75,9 +66,6 @@ export default function Nucleo() {
       hide.remove();
     };
   }, []);
-
-  const now = new Date();
-  const next = agenda?.find((e) => !e.allDay && new Date(e.end) > now);
 
   const changeVoice = (on: boolean) => {
     setVoice(on);
@@ -127,44 +115,12 @@ export default function Nucleo() {
 
         {talking ? (
           <Animated.View entering={FadeInDown.duration(350).delay(200)} style={{ flex: 1, gap: GAP }}>
-            <View style={styles.topRow}>
-              {!typing && agenda ? (
-                <View style={styles.chip}>
-                  <IconCalendar color={C.accentSoft} size={15} />
-                  <Text style={styles.chipText} numberOfLines={1}>
-                    {next ? `${hhmm(new Date(next.start).getHours(), new Date(next.start).getMinutes())} ${next.title}` : agenda.length ? `${agenda.length} hoy` : 'Día libre'}
-                  </Text>
-                </View>
-              ) : null}
-              <View style={styles.actions}>
-                <ChatAction icon={<IconClock color={C.accentSoft} size={16} />} label="Historial" hint="Tus conversaciones anteriores" onPress={openHistory} />
-                <ChatAction icon={<IconPlus color={C.accentSoft} size={16} />} label="Nueva" hint={thinking ? 'Espera a que DESJ termine' : 'Empieza una conversación desde cero'} disabled={thinking} onPress={newChat} />
-              </View>
-            </View>
             <ChatPanel voice={voice} onActivity={setActivity} />
           </Animated.View>
         ) : null}
       </KeyboardAvoidingView>
       <ChatHistory visible={history} onClose={() => setHistory(false)} />
     </Screen>
-  );
-}
-
-/** Botón de contorno de la esquina del chat (Historial, Nueva). */
-function ChatAction({ icon, label, hint, disabled, onPress }: { icon: ReactNode; label: string; hint: string; disabled?: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      hitSlop={4}
-      style={({ pressed }) => [styles.action, pressed && styles.actionPressed, disabled && { opacity: 0.5 }]}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityHint={hint}
-      accessibilityState={{ disabled }}>
-      {icon}
-      <Text style={styles.actionText}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -180,11 +136,4 @@ const styles = StyleSheet.create({
   },
   talkPressed: { transform: [{ scale: 0.97 }] },
   talkText: { color: C.onAccent, fontFamily: mono, fontSize: 13, fontWeight: '700', letterSpacing: 3, textTransform: 'uppercase' },
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  actions: { flexDirection: 'row', gap: 8, marginLeft: 'auto' },
-  action: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: 12, borderRadius: R.pill, borderWidth: 1, borderColor: C.border, backgroundColor: C.surfaceInput },
-  actionPressed: { backgroundColor: C.surfaceSelected, transform: [{ scale: 0.97 }] },
-  actionText: { color: C.text, fontSize: 13.5, fontWeight: '600' },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36, maxWidth: 220, flexShrink: 1, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: C.border, backgroundColor: C.surfaceInput, justifyContent: 'center' },
-  chipText: { color: C.chipText, fontSize: 13.5, fontWeight: '500' },
 });

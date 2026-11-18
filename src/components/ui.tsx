@@ -8,6 +8,7 @@ import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg';
 import { IconBack } from '@/components/icons';
 import { NeuralBackground } from '@/components/neural-bg';
 import { ProfileButton } from '@/components/profile-menu';
+import { hhmmOf, useClock } from '@/lib/clock';
 import { useLayout } from '@/lib/layout';
 import { useMotion } from '@/lib/motion';
 import { C, mono, S } from '@/theme';
@@ -44,6 +45,7 @@ export function Screen({ children, scroll = true, wide = false, menu, back = fal
           <View>{menu}</View>
         )}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: h.gap, flexShrink: 1 }}>
+          <HeaderClock size={h.label + 2} />
           <MotionToggle />
           <ProfileButton />
         </View>
@@ -51,6 +53,16 @@ export function Screen({ children, scroll = true, wide = false, menu, back = fal
       {body}
       {overlay}
     </SafeAreaView>
+  );
+}
+
+/** Hora del header, a la izquierda de ANIM. */
+function HeaderClock({ size }: { size: number }) {
+  const time = hhmmOf(useClock());
+  return (
+    <Text style={[styles.clock, { fontSize: size }]} accessibilityLabel={`Son las ${time}`}>
+      {time}
+    </Text>
   );
 }
 
@@ -155,6 +167,7 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
     ...WIDE,
   },
+  clock: { fontFamily: mono, fontWeight: '600', letterSpacing: 1.5, color: C.text },
   brand: { fontFamily: mono, fontSize: 12, letterSpacing: 3, color: C.accentSoft },
   content: { padding: S.pad, gap: S.gap, paddingBottom: 40, ...WIDE },
   title: { fontSize: 30, fontWeight: '800', color: C.text, letterSpacing: -0.5 },
