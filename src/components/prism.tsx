@@ -71,18 +71,19 @@ export function Prism({ size, state = 'online', active = true }: { size: number;
       cancelAnimation(s);
       if (!running) return s.set(PRISM_SPREAD[state]);
       if (state === 'thinking') {
-        // Pensando: las cuchillas laten hacia afuera por turnos.
-        const pulse = withSequence(withTiming(14, { duration: 520, easing: EASE }), withTiming(0, { duration: 520, easing: EASE }));
-        s.set(withDelay(i * 240, withRepeat(pulse, -1)));
+        // Pensando: las cuchillas laten hacia afuera por turnos, rápido.
+        const pulse = withSequence(withTiming(16, { duration: 300, easing: EASE }), withTiming(0, { duration: 300, easing: EASE }));
+        s.set(withDelay(i * 140, withRepeat(pulse, -1)));
       } else {
         s.set(withTiming(PRISM_SPREAD[state], { duration: 450, easing: EASE }));
       }
     });
     cancelAnimation(breath);
     if (!running) return breath.set(1);
-    // Respira despacio en reposo; en alerta, rápido.
-    const fast = state === 'alert';
-    breath.set(withRepeat(withTiming(fast ? 1.05 : 1.025, { duration: fast ? 650 : 2600, easing: Easing.inOut(Easing.sin) }), -1, true));
+    // Respira despacio en reposo; pensando, más rápido; en alerta, rápido y más marcado.
+    const amount = state === 'alert' ? 1.05 : state === 'thinking' ? 1.04 : 1.025;
+    const period = state === 'alert' ? 650 : state === 'thinking' ? 800 : 2600;
+    breath.set(withRepeat(withTiming(amount, { duration: period, easing: Easing.inOut(Easing.sin) }), -1, true));
   }, [state, running, s0, s1, s2, breath]);
 
   const breathing = useAnimatedStyle(() => ({ transform: [{ scale: breath.get() }] }));

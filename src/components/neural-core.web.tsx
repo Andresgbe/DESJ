@@ -144,7 +144,7 @@ export function NeuralCore({ size, thinking = false, labels = true, active = tru
       // La energía se acerca a su objetivo en ~0.7 s (pensando = 1, en reposo = 0).
       s.energy += (target.current - s.energy) * Math.min(1, step * 4);
       s.time += step;
-      s.angle += step * (0.09 + s.energy * 0.4);
+      s.angle += step * (0.09 + s.energy * 1);
       paint();
     };
     raf = requestAnimationFrame(frame);

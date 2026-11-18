@@ -1,7 +1,7 @@
 // Menú hamburguesa del Núcleo: la conversación actual, el historial, empezar una nueva y la
 // respuesta en voz. Se despliega bajo el botón, igual que el menú de perfil.
 import { useRef, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { Easing, FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { IconMenu } from '@/components/icons';
@@ -27,14 +27,14 @@ export function ChatMenu({
 }) {
   const { conversations, activeId, busy, newChat } = useChats();
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 60, right: 16 });
-  const { width } = useWindowDimensions();
+  const [pos, setPos] = useState({ top: 60, left: 16 });
   const btn = useRef<View>(null);
   const title = conversations.find((c) => c.id === activeId)?.title ?? 'Nueva conversación';
 
   const show = () => {
-    // En web el contenido es una columna centrada: el menú se alinea con el botón, no con la ventana.
-    btn.current?.measureInWindow((x, y, w, h) => setPos({ top: y + h + 8, right: Math.max(16, width - x - w) }));
+    // El botón está a la izquierda del header: el menú se abre debajo, alineado con su borde izquierdo
+    // (en web el contenido es una columna centrada, así que se mide el botón y no la ventana).
+    btn.current?.measureInWindow((x, y, _w, h) => setPos({ top: y + h + 8, left: Math.max(16, x) }));
     setOpen(true);
   };
 

@@ -142,7 +142,7 @@ export function NeuralCore({ size, thinking = false, labels = true, active = tru
     if (dt < STEP) return pending.set(dt);
     pending.set(0);
     time.set(time.get() + dt);
-    angle.set(angle.get() + dt * (0.09 + energy.get() * 0.4));
+    angle.set(angle.get() + dt * (0.09 + energy.get() * 1));
   }, false);
 
   useEffect(() => {

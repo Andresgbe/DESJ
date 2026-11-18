@@ -136,7 +136,7 @@ src/
   components/
     ui.tsx                 ← Screen (header con círculo de perfil), Card, Title, Label, Mono, Row, HudRing
     desj-core.tsx          ← DesjCore: el cerebro con el prisma en el centro + línea de estado (D·E·S·J · hora · estado)
-    prism.tsx              ← Prism (logo animado con 5 estados, centro del cerebro) y PrismMark (logo quieto del header)
+    prism.tsx              ← Prism (logo animado con 5 estados, centro del cerebro) y PrismMark (logo quieto; hoy sin uso, el header ya no lleva marca)
     prism-shape.ts         ← forma del prisma como texto SVG (la usan la app y design/logo.mjs)
     brain-graph.ts         ← modelo del cerebro: genera la red 3D (grupos = módulos) y proyecta cada cuadro
     neural-core.tsx        ← dibujo del cerebro con Skia (teléfono) · neural-core.web.tsx ← con <canvas> (web)
@@ -201,7 +201,7 @@ Inspirada en el carrusel de Adrián y en los grafos tipo "Jarvis": fondo casi ne
 **Decisión (18 oct 2026):** el HUD de anillos concéntricos se reemplazó por el cerebro. Se dibuja con `@shopify/react-native-skia` en el teléfono (viene en Expo Go) y con `<canvas>` en web. Cuando DESJ piensa, el cerebro acelera, salen más señales y el núcleo brilla más.
 
 **Logo: el Corazón de DESJ (18 nov 2026).** El logo de DESJ se llama **Corazón de DESJ** (así se le dice desde el 18 nov 2026). Es el **Prisma Interconectado, versión B**: tres cuchillas de vidrio biselado que forman un triángulo, repetidas cada 120°, con un triángulo punteado y un nodo en el centro. Se diseñó con Gemini: https://gemini.google.com/share/a6e977fe4c45?social_preview=true&skid=b4415182-9fcf-44bd-9474-36238675a063 (propuesta "Vista Maestra A+B+C"). Los 5 SVG originales están en `design/prisma/` (`online`, `listening`, `thinking`, `responding`, `alert`).
-- **Dónde va:** en el centro del cerebro, al 42 % del lado del cerebro (reemplazó a la esfera de alambre; el cerebro bajó de 1.500 a 1.200 nodos para que el corazón respire), en el header junto a "DESJ" (`PrismMark`, quieto) y como ícono: favicon, ícono de la web instalable (PWA), ícono del iPhone y splash. Dentro del cerebro va el triángulo con un anillo propio (un círculo fino y uno punteado, del color del estado, sobre un disco oscuro que atenúa los nodos de atrás); los anillos grandes y los 4 puntos en órbita van solo en el ícono.
+- **Dónde va:** en el centro del cerebro, al 42 % del lado del cerebro (reemplazó a la esfera de alambre; el cerebro bajó de 1.500 a 1.200 nodos para que el corazón respire) y como ícono: favicon, ícono de la web instalable (PWA), ícono del iPhone y splash. Dentro del cerebro va el triángulo con un anillo propio (un círculo fino y uno punteado, del color del estado, sobre un disco oscuro que atenúa los nodos de atrás); los anillos grandes y los 4 puntos en órbita van solo en el ícono.
 - **Código:** la forma está en `src/components/prism-shape.ts` (texto SVG puro, sin React Native) y la usan la app (`prism.tsx`) y los íconos (`design/logo.mjs`). Los colores salen de los tokens `prism-*`; las luces y sombras de cada estado se calculan mezclando su color con blanco y con el fondo.
 - **Estados** (cambian el color del prisma y la línea de estado bajo el cerebro):
 
@@ -209,15 +209,17 @@ Inspirada en el carrusel de Adrián y en los grafos tipo "Jarvis": fondo casi ne
 |---|---|---|---|---|
 | En línea | `prism-online` | `#3993F5` Azul Eléctrico (PMS 2727 C) | reposo | respira despacio |
 | Escuchando | `prism-listening` | `#45B6FE` Cian Holográfico (PMS 2985 C) | dictado por voz activo | cuchillas un poco abiertas |
-| Pensando | `prism-thinking` | `#596D8C` Gris Pizarra Azulado (PMS 7545 C) | DESJ prepara la respuesta | cuchillas laten por turnos; el cerebro acelera |
-| Respondiendo | `prism-responding` | `#8EA4C8` Azul Acero Claro (PMS 5425 C) | lee la respuesta en voz alta (o 1,5 s al llegar si la voz está apagada) | cuchillas apenas abiertas |
+| Pensando | `prism-thinking` | `#A9DDFF` azul hielo muy claro (antes `#596D8C` Gris Pizarra Azulado, PMS 7545 C: se cambió el 18 nov 2026 porque se veía apagado) | DESJ prepara la respuesta | todo se acelera: el cerebro gira ~2× más rápido y las señales vuelan; las cuchillas del corazón laten rápido por turnos y respira más rápido |
+| Respondiendo | `prism-responding` | `#64F4AC` Verde Menta Neón (PMS 3385 C; antes `#8EA4C8` Azul Acero Claro, cambiado el 18 nov 2026) | lee la respuesta en voz alta (o 1,5 s al llegar si la voz está apagada) | cuchillas apenas abiertas |
 | Alerta | `prism-alert` | `#FF2A54` Rojo Neón Alerta (PMS 1925 C) | pendientes atrasados | cuchillas abiertas y respiración rápida |
 
   [pendiente] conectar **Alerta** a los pendientes atrasados: el componente ya la soporta, pero hoy el Núcleo solo usa En línea, Escuchando, Pensando y Respondiendo.
-- **Resto de la paleta de la propuesta (referencia, no son tokens):** Abismo Nocturno `#040811` (PMS 296 C, fondo), Pizarra HUD `#0A1224` (PMS 282 C, tarjetas), Verde Menta Neón `#64F4AC` (PMS 3385 C, salud y biométricos), Rojo Carmesí Vencido `#C8102E` (PMS 186 C, notificaciones pasadas y bordes de alerta). La app sigue con sus fondos `bg`/`card` y su verde `ok`; si se quiere adoptar alguno, primero se agrega como token.
+- **Resto de la paleta de la propuesta (referencia, no son tokens):** Abismo Nocturno `#040811` (PMS 296 C, fondo), Pizarra HUD `#0A1224` (PMS 282 C, tarjetas), Rojo Carmesí Vencido `#C8102E` (PMS 186 C, notificaciones pasadas y bordes de alerta). La app sigue con sus fondos `bg`/`card` y su verde `ok`; si se quiere adoptar alguno, primero se agrega como token.
 - **Regenerar los íconos** después de cambiar el logo: `node scripts/render-logo.mjs` (con Playwright) o `node scripts/render-logo.mjs <ruta a puppeteer-core>` (Chrome en Windows). Necesita Node 22.18 o más nuevo.
 
-**Núcleo (18 oct 2026):** sin saludo ni fecha. Al entrar solo se ve DESJ grande y centrado con el botón **HABLAR CON DESJ**; al tocarlo el cerebro se achica y sube (450 ms) y aparece la conversación. Historial, conversación nueva, voz y "Volver a DESJ" están en el menú hamburguesa del header.
+**Núcleo (18 oct 2026):** sin saludo ni fecha. Al entrar solo se ve DESJ grande y centrado con el botón **HABLAR CON DESJ**; al tocarlo el cerebro se achica y sube (450 ms) y aparece la conversación. Historial, conversación nueva, voz y "Volver a DESJ" están en el menú hamburguesa, a la **izquierda** del header.
+
+**Header (18 nov 2026):** se quitó la marca "DESJ" (y el logo) de la izquierda del header. Ahí va el menú de la pantalla si tiene uno (la hamburguesa del Núcleo, que abre su lista hacia la derecha); si no, ese lado queda vacío. Las pantallas internas siguen con la flecha "‹ DESJ" para volver.
 
 **Chat más claro (11 nov 2026):** con la conversación abierta, **Historial** y **Nueva** quedan a la vista arriba a la derecha (botones de contorno con ícono y texto); el menú hamburguesa los repite y suma la voz y "Volver a DESJ". Tus mensajes que el worker no respondió muestran "● En cola" (o "● Sin respuesta" si fallaron), y sobre la barra aparece una franja con **Reintentar conexión**: vuelve a poner en la cola todo lo pendiente o fallido (hasta 50 por toque) (con la agenda de hoy y `context.retried_at`, para que el worker no lo dé por vencido), espera ~25 s a que el worker lo tome (si no, sigue apagado y todo queda en cola), muestra el avance, recarga la conversación y ejecuta en el teléfono los avisos y eventos de cada respuesta. El worker guarda `context.reply_to` en cada respuesta para que la app sepa a qué mensaje contesta, y si el mensaje esperó más de 1 h le dice a Claude cuándo se escribió (para que "ayer" sea el día correcto).
 

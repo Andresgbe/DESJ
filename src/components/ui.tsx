@@ -7,14 +7,13 @@ import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg';
 
 import { IconBack } from '@/components/icons';
 import { NeuralBackground } from '@/components/neural-bg';
-import { PrismMark } from '@/components/prism';
 import { ProfileButton } from '@/components/profile-menu';
 import { useLayout } from '@/lib/layout';
 import { useMotion } from '@/lib/motion';
 import { C, mono, S } from '@/theme';
 
 /**
- * `menu`: botón extra en el header, a la izquierda del perfil (p. ej. el menú hamburguesa del Núcleo).
+ * `menu`: botón en el lado izquierdo del header (p. ej. el menú hamburguesa del Núcleo).
  * `back`: muestra la flecha para volver (pantallas dentro de un módulo, como YO → Salud).
  */
 /** `overlay`: algo que flota sobre el contenido sin desplazarse con él (p. ej. el botón "+" del Calendario). */
@@ -39,15 +38,12 @@ export function Screen({ module, children, scroll = true, wide = false, menu, ba
             <Text style={styles.brand}>DESJ</Text>
           </Pressable>
         ) : (
-          <View style={styles.brandRow} accessibilityRole="header" accessibilityLabel="DESJ">
-            <PrismMark size={22} />
-            <Text style={styles.brand}>DESJ</Text>
-          </View>
+          // El menú (p. ej. la hamburguesa del Núcleo) va a la izquierda; sin menú, el lado queda vacío.
+          <View>{menu}</View>
         )}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
           <Label numberOfLines={1} style={{ flexShrink: 1 }}>{module}</Label>
           <MotionToggle />
-          {menu}
           <ProfileButton />
         </View>
       </View>
@@ -157,7 +153,6 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
     ...WIDE,
   },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   brand: { fontFamily: mono, fontSize: 12, letterSpacing: 3, color: C.accentSoft },
   content: { padding: S.pad, gap: S.gap, paddingBottom: 40, ...WIDE },
   title: { fontSize: 30, fontWeight: '800', color: C.text, letterSpacing: -0.5 },

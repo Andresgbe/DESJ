@@ -214,7 +214,7 @@ export function computeFrame(g: Graph, size: number, angle: number, time: number
   const active = Math.floor(total * (0.18 + 0.82 * energy));
   for (let s = 0; s < active; s++) {
     const e = g.signals[s * 3] * 2;
-    const t = (time * g.signals[s * 3 + 2] * (1 + energy * 1.6) + g.signals[s * 3 + 1]) % 1;
+    const t = (time * g.signals[s * 3 + 2] * (1 + energy * 2.6) + g.signals[s * 3 + 1]) % 1;
     const a = g.edges[e];
     const b = g.edges[e + 1];
     signals[g.c[a]].push({ x: px[a] + (px[b] - px[a]) * t, y: py[a] + (py[b] - py[a]) * t });
