@@ -1,19 +1,20 @@
-// Pantalla · Conocimiento (desde el menú de perfil).
+// Pantalla · Conocimiento (desde el menú de perfil). Usa el mismo Screen que el resto de la app
+// (fondo con la red, header con volver, hora, ANIM y perfil) para que se sienta parte de DESJ.
 // Entrevista: DESJ pregunta y con cada respuesta reescribe tus archivos Markdown.
 // Archivos: ver, editar, renombrar y borrar los de base (perfil, salud, negocios, preferencias) y crear los tuyos.
 import * as Haptics from 'expo-haptics';
 import { useEffect, useRef, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 
 import { Btn, Field } from '@/components/form';
 import { IconPlus } from '@/components/icons';
-import { Card, Label, Mono, Row } from '@/components/ui';
+import { PrismMark } from '@/components/prism';
+import { Card, Label, Mono, Row, Screen, Title } from '@/components/ui';
 import { askDesj } from '@/lib/brain';
 import { confirm, notify } from '@/lib/confirm';
 import { listFiles, nextQuestion, QUESTIONS, Slug, useKnowledge } from '@/lib/knowledge';
-import { C, mono } from '@/theme';
+import { C, mono, R, S } from '@/theme';
 
 type Msg = { id: string; from: 'me' | 'desj'; text: string };
 
@@ -22,18 +23,19 @@ export default function Conocimiento() {
   const [tab, setTab] = useState<'entrevista' | 'archivos'>('entrevista');
 
   return (
-    <SafeAreaView style={styles.screen} edges={['bottom']}>
-      <View style={styles.wrap}>
+    <Screen module="Conocimiento" scroll={false} back>
+      <View style={{ gap: 6 }}>
+        <Title accent="conocimiento">Tu</Title>
         <Text style={styles.intro}>
           Lo que DESJ sabe de ti vive en estos archivos y los lee antes de cada respuesta. Solo tú los ves.
         </Text>
-        <View style={styles.segment}>
-          <Seg label="Entrevista" active={tab === 'entrevista'} onPress={() => setTab('entrevista')} />
-          <Seg label="Archivos" active={tab === 'archivos'} onPress={() => setTab('archivos')} />
-        </View>
-        {!k.ready ? null : tab === 'entrevista' ? <Interview k={k} /> : <Files k={k} />}
       </View>
-    </SafeAreaView>
+      <View style={styles.segment} accessibilityRole="tablist">
+        <Seg label="Entrevista" active={tab === 'entrevista'} onPress={() => setTab('entrevista')} />
+        <Seg label="Archivos" active={tab === 'archivos'} onPress={() => setTab('archivos')} />
+      </View>
+      {!k.ready ? null : tab === 'entrevista' ? <Interview k={k} /> : <Files k={k} />}
+    </Screen>
   );
 }
 
@@ -88,18 +90,18 @@ function Interview({ k }: { k: K }) {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, gap: 8 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={100}>
-      {!k.cloud ? (
+      <View style={{ gap: 6 }}>
         <Row>
-          <Label>{`Básicos: ${k.progress.answered} de ${k.progress.total}`}</Label>
-          {skippedCount && !questionId ? (
-            <Pressable onPress={async () => { await k.resetSkipped(); started.current = false; setMsgs([]); }} hitSlop={8}>
+          <Label>{`Datos básicos · ${k.progress.answered} de ${k.progress.total}`}</Label>
+          {!k.cloud && skippedCount && !questionId ? (
+            <Pressable onPress={async () => { await k.resetSkipped(); started.current = false; setMsgs([]); }} hitSlop={12}>
               <Label style={{ color: C.accentSoft }}>{`Retomar ${skippedCount} saltadas`}</Label>
             </Pressable>
           ) : null}
         </Row>
-      ) : null}
-      <View style={styles.bar}>
-        <View style={[styles.barFill, { width: `${(k.progress.answered / k.progress.total) * 100}%` }]} />
+        <View style={styles.bar}>
+          <View style={[styles.barFill, { width: `${(k.progress.answered / k.progress.total) * 100}%` }]} />
+        </View>
       </View>
 
       <FlatList
@@ -113,8 +115,12 @@ function Interview({ k }: { k: K }) {
         ListEmptyComponent={
           k.cloud ? (
             <Card>
+              <Row style={{ justifyContent: 'flex-start', gap: 10 }}>
+                <PrismMark size={28} />
+                <Label>Entrevista con DESJ</Label>
+              </Row>
               <Text style={styles.msg}>DESJ te hará preguntas una por una y actualizará tus archivos con cada respuesta.</Text>
-              <Pressable onPress={() => send('Empecemos la entrevista.')} style={styles.start} accessibilityRole="button">
+              <Pressable onPress={() => send('Empecemos la entrevista.')} style={({ pressed }) => [styles.start, pressed && { transform: [{ scale: 0.98 }] }]} accessibilityRole="button">
                 <Text style={styles.startText}>Empezar entrevista</Text>
               </Pressable>
             </Card>
@@ -126,7 +132,12 @@ function Interview({ k }: { k: K }) {
           </View>
         )}
       />
-      {busy ? <Label style={{ color: C.ok }}>● DESJ pensando…</Label> : null}
+      {busy ? (
+        <View style={[styles.bot, styles.thinking]} accessibilityLiveRegion="polite">
+          <PrismMark size={18} />
+          <Label style={{ color: C.accentSoft }}>DESJ está pensando…</Label>
+        </View>
+      ) : null}
 
       <View style={styles.inputBar}>
         <TextInput
@@ -266,28 +277,30 @@ function Files({ k }: { k: K }) {
   );
 }
 
+/** Pestaña del HUD: contorno; la activa con borde destacado, fondo seleccionado y texto claro. */
 function Seg({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={[styles.seg, active && { backgroundColor: C.accent }]} accessibilityRole="tab" accessibilityState={{ selected: active }}>
-      <Text style={{ color: active ? C.onAccent : C.text, fontSize: 14, fontWeight: '600' }}>{label}</Text>
+    <Pressable onPress={onPress} style={[styles.seg, active && styles.segActive]} accessibilityRole="tab" accessibilityState={{ selected: active }}>
+      <Text style={[styles.segText, { color: active ? C.tabActive : C.muted }]}>{label}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: C.bg },
-  wrap: { flex: 1, padding: 16, gap: 12, width: '100%', maxWidth: 640, alignSelf: 'center' },
   intro: { color: C.muted, fontSize: 13.5, lineHeight: 19 },
-  segment: { flexDirection: 'row', gap: 6 },
-  seg: { flex: 1, minHeight: 40, borderRadius: 10, borderWidth: 1, borderColor: C.cardBorder, alignItems: 'center', justifyContent: 'center' },
+  segment: { flexDirection: 'row', gap: S.xs, padding: 4, borderRadius: R.pill, borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.surfaceSunken },
+  seg: { flex: 1, minHeight: S.touch - 4, borderRadius: R.pill, borderWidth: 1, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center' },
+  segActive: { backgroundColor: C.surfaceSelected, borderColor: C.border },
+  segText: { fontFamily: mono, fontSize: 12, letterSpacing: 2, textTransform: 'uppercase' },
+  thinking: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   bar: { height: 3, borderRadius: 2, backgroundColor: C.cardBorder, overflow: 'hidden' },
   barFill: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: C.accent },
   me: { alignSelf: 'flex-end', maxWidth: '82%', backgroundColor: C.bubbleMe, borderRadius: 16, borderBottomRightRadius: 4, padding: 12 },
   bot: { alignSelf: 'flex-start', maxWidth: '86%', backgroundColor: C.surfaceInput, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 16, borderBottomLeftRadius: 4, padding: 12 },
   msg: { color: C.text, fontSize: 15, lineHeight: 21 },
-  start: { minHeight: 46, borderRadius: 14, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
-  startText: { color: C.onAccent, fontSize: 15, fontWeight: '700' },
-  inputBar: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.surfaceInput, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 28, paddingLeft: 16, padding: 6 },
+  start: { minHeight: S.touch, borderRadius: R.pill, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
+  startText: { color: C.onAccent, fontFamily: mono, fontSize: 13, fontWeight: '700', letterSpacing: 3, textTransform: 'uppercase' },
+  inputBar: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.surfaceInput, borderColor: C.cardBorder, borderWidth: 1, borderRadius: R.bar, paddingLeft: 16, padding: 6 },
   input: { flex: 1, color: C.text, fontSize: 15, minHeight: 40 },
   send: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
   hint: { color: C.muted, fontSize: 12.5 },
