@@ -9,7 +9,9 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from '
 
 import { NeuralCore } from '@/components/neural-core';
 import { Prism, type PrismState } from '@/components/prism';
+import { VoiceWave } from '@/components/voice-wave';
 import { useClock, hhmmOf } from '@/lib/clock';
+import { PRISM } from '@/theme';
 
 export const RESIZE = { duration: 450, easing: Easing.bezier(0.77, 0, 0.175, 1) };
 
@@ -51,6 +53,12 @@ export function DesjCore({ size = 260, display = size, label, state = 'online', 
           <View style={styles.prism}>
             <Prism size={Math.round(size * PRISM_SIZE)} state={state} active={active} />
           </View>
+          {/* Onda de voz: mientras le hablas a DESJ y mientras DESJ te responde en voz alta. */}
+          {state === 'listening' || state === 'responding' ? (
+            <View style={[styles.wave, { bottom: size * 0.02 }]}>
+              <VoiceWave width={Math.round(size * 0.55)} height={Math.round(size * 0.075)} color={PRISM[state]} active={active} />
+            </View>
+          ) : null}
         </Animated.View>
       </Animated.View>
     </View>
@@ -63,5 +71,6 @@ export const STATUS_HEIGHT = 0;
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center', gap: 2 },
   box: { alignItems: 'center', justifyContent: 'center' },
+  wave: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   prism: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
 });

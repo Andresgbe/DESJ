@@ -25,7 +25,7 @@ const REPLY_FLASH = 1500;
  * `voice`: leer en voz alta las respuestas (se cambia desde el menú hamburguesa).
  * `onActivity`: avisa si DESJ te está escuchando (dictado) o respondiendo (leyendo la respuesta).
  */
-export function ChatPanel({ voice, onActivity }: { voice: boolean; onActivity?: (a: ChatActivity) => void }) {
+export function ChatPanel({ voice, onActivity, voiceStart = 0 }: { voice: boolean; onActivity?: (a: ChatActivity) => void; voiceStart?: number }) {
   const { messages, busy, send } = useChats();
   const [input, setInput] = useState('');
   const [files, setFiles] = useState<Attachment[]>([]);
@@ -80,7 +80,11 @@ export function ChatPanel({ voice, onActivity }: { voice: boolean; onActivity?: 
     const text = input.trim();
     if (!canSend || busy) return;
     stopListening.current?.();
-    const sending = files;
+    await deliver(text, files);
+  };
+
+  /** Envía el mensaje y, si la voz está activa (o se habló por voz), lee la respuesta en voz alta. */
+  const deliver = async (text: string, sending: Attachment[], speak = voice) => {
     setInput('');
     setFiles([]);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -88,7 +92,7 @@ export function ChatPanel({ voice, onActivity }: { voice: boolean; onActivity?: 
     if (!reply) return;
     if (flash.current) clearTimeout(flash.current);
     setSpeaking(true);
-    if (voice) {
+    if (speak) {
       // Al cortar la lectura (Speech.stop: voz apagada, dictado, cerrar el chat) también vuelve a reposo.
       const done = () => setSpeaking(false);
       Speech.speak(reply, { language: 'es-ES', rate: 1.0, onDone: done, onStopped: done, onError: done });
@@ -111,11 +115,48 @@ export function ChatPanel({ voice, onActivity }: { voice: boolean; onActivity?: 
     }
   };
 
+  // Hablar por voz (botón de micrófono del Núcleo): escucha y, al terminar de hablar, envía solo
+  // lo que dijiste y DESJ responde en voz alta. Cada toque del botón sube `voiceStart`.
+  const heard = useRef('');
+  const talkByVoice = async () => {
+    if (!dictationAvailable) {
+      return notify('Tu navegador no permite dictar. En el iPhone usa Safari, o el micrófono del teclado.');
+    }
+    Speech.stop();
+    heard.current = '';
+    const stop = await startDictation({
+      onText: (t) => {
+        heard.current = t;
+        setInput(t);
+      },
+      onEnd: () => {
+        setListening(false);
+        stopListening.current = null;
+        const text = heard.current.trim();
+        if (text) deliver(text, [], true);
+      },
+      onError: notify,
+      continuous: false,
+    });
+    if (stop) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      stopListening.current = stop;
+      setListening(true);
+    }
+  };
+  const lastVoiceStart = useRef(0);
+  useEffect(() => {
+    if (!voiceStart || voiceStart === lastVoiceStart.current) return;
+    lastVoiceStart.current = voiceStart;
+    talkByVoice();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceStart]);
+
   // Micrófono: toca para dictar, toca otra vez para parar. El texto va apareciendo en el campo.
   const toggleMic = async () => {
     if (listening) return stopListening.current?.();
     if (!dictationAvailable) {
-      return notify('El dictado de DESJ funciona en la app instalada. Mientras tanto, usa el micrófono del teclado del iPhone.');
+      return notify('Tu navegador no permite dictar. En el iPhone usa Safari, o el micrófono del teclado.');
     }
     Speech.stop();
     const before = input.trim();

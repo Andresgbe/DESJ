@@ -14,10 +14,12 @@ type Handlers = {
   onText: (text: string) => void;
   onEnd: () => void;
   onError: (message: string) => void;
+  /** false: termina solo cuando haces una pausa (conversación por voz). Por defecto sigue hasta que la detengas. */
+  continuous?: boolean;
 };
 
 /** Empieza a escuchar. Devuelve una función para detener, o null si no hay permiso o no está disponible. */
-export async function startDictation({ onText, onEnd, onError }: Handlers): Promise<(() => void) | null> {
+export async function startDictation({ onText, onEnd, onError, continuous = true }: Handlers): Promise<(() => void) | null> {
   if (!dictationAvailable) return null;
   const { ExpoSpeechRecognitionModule: Speech } = lib();
   const perm = await Speech.requestPermissionsAsync();
@@ -37,6 +39,6 @@ export async function startDictation({ onText, onEnd, onError }: Handlers): Prom
     }),
   ];
 
-  Speech.start({ lang: 'es-ES', interimResults: true, continuous: true, addsPunctuation: true });
+  Speech.start({ lang: 'es-ES', interimResults: true, continuous, addsPunctuation: true });
   return () => Speech.stop();
 }

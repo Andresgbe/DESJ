@@ -5,23 +5,24 @@ import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Keyboard, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { ChatHistory } from '@/components/chat-history';
 import { ChatMenu } from '@/components/chat-menu';
 import { ChatActivity, ChatPanel } from '@/components/chat-panel';
 import { DesjCore, RESIZE, STATUS_HEIGHT } from '@/components/desj-core';
+import { IconMic } from '@/components/icons';
 import { Screen } from '@/components/ui';
 import { useChats } from '@/lib/chats';
 import { useLayout } from '@/lib/layout';
-import { C, mono, S } from '@/theme';
+import { C, mono, R, S } from '@/theme';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 const GAP = 10;
 const TALK_GAP = 28; // entre el cerebro y el botón
-const TALK_HEIGHT = 52;
+const TALK_HEIGHT = 64; // botones grandes del inicio: Hablar con DESJ y micrófono
 
 export default function Nucleo() {
   const { busy: thinking } = useChats();
@@ -77,6 +78,15 @@ export default function Nucleo() {
     setTalking(true);
   };
 
+  // Micrófono del inicio: abre la conversación y empieza a escucharte de una vez; al terminar de
+  // hablar se envía solo y DESJ responde en voz alta (la onda de voz sale bajo el corazón).
+  const [voiceStart, setVoiceStart] = useState(0);
+  const startVoice = () => {
+    setVoice(true);
+    setTalking(true);
+    setVoiceStart((n) => n + 1);
+  };
+
   const stopTalking = () => {
     Keyboard.dismiss();
     Speech.stop();
@@ -101,21 +111,31 @@ export default function Nucleo() {
           <DesjCore size={big} display={display} state={thinking ? 'thinking' : (activity ?? 'online')} active={focused} />
           {!talking ? (
             <Animated.View entering={FadeIn.duration(250)} exiting={FadeOut.duration(150)} style={{ marginTop: TALK_GAP }}>
-              <AnimatedPressable
-                onPress={startTalking}
-                onPressIn={() => setPressed(true)}
-                onPressOut={() => setPressed(false)}
-                style={[styles.talk, pressed && styles.talkPressed]}
-                accessibilityRole="button">
-                <Text style={styles.talkText}>Hablar con DESJ</Text>
-              </AnimatedPressable>
+              <View style={styles.talkRow}>
+                <AnimatedPressable
+                  onPress={startTalking}
+                  onPressIn={() => setPressed(true)}
+                  onPressOut={() => setPressed(false)}
+                  style={[styles.talk, pressed && styles.talkPressed]}
+                  accessibilityRole="button">
+                  <Text style={styles.talkText}>Hablar con DESJ</Text>
+                </AnimatedPressable>
+                <Pressable
+                  onPress={startVoice}
+                  style={({ pressed: p }) => [styles.voice, p && styles.talkPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Hablar por voz"
+                  accessibilityHint="DESJ te escucha y te responde en voz alta">
+                  <IconMic color={C.accentSoft} size={28} />
+                </Pressable>
+              </View>
             </Animated.View>
           ) : null}
         </Animated.View>
 
         {talking ? (
           <Animated.View entering={FadeInDown.duration(350).delay(200)} style={{ flex: 1, gap: GAP }}>
-            <ChatPanel voice={voice} onActivity={setActivity} />
+            <ChatPanel voice={voice} onActivity={setActivity} voiceStart={voiceStart} />
           </Animated.View>
         ) : null}
       </KeyboardAvoidingView>
@@ -127,13 +147,25 @@ export default function Nucleo() {
 const styles = StyleSheet.create({
   talk: {
     minHeight: TALK_HEIGHT,
-    paddingHorizontal: 32,
-    borderRadius: 999,
+    paddingHorizontal: 44,
+    borderRadius: R.pill,
     backgroundColor: C.accent,
     alignItems: 'center',
     justifyContent: 'center',
     boxShadow: `0 0 24px ${C.accent}73`,
   },
   talkPressed: { transform: [{ scale: 0.97 }] },
-  talkText: { color: C.onAccent, fontFamily: mono, fontSize: 13, fontWeight: '700', letterSpacing: 3, textTransform: 'uppercase' },
+  talkText: { color: C.onAccent, fontFamily: mono, fontSize: 15, fontWeight: '700', letterSpacing: 3.5, textTransform: 'uppercase' },
+  talkRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  voice: {
+    width: TALK_HEIGHT,
+    height: TALK_HEIGHT,
+    borderRadius: R.pill,
+    borderWidth: 1.5,
+    borderColor: C.accent,
+    backgroundColor: C.surfaceInput,
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: `0 0 18px ${C.accent}40`,
+  },
 });
