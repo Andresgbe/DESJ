@@ -23,7 +23,7 @@ export const STATE_LABEL: Record<PrismState, string> = {
 };
 
 /** Lado del Corazón de DESJ (el prisma) respecto del cerebro. */
-const PRISM_SIZE = 0.42;
+const PRISM_SIZE = 0.3;
 
 /** `active={false}` pausa el cerebro y el prisma (pantalla fuera de vista). `label` reemplaza el nombre del estado. */
 type Props = { size?: number; display?: number; label?: string; state?: PrismState; active?: boolean };
