@@ -47,10 +47,11 @@ export function DesjCore({ size = 260, display = size, label, state = 'online', 
     <View style={styles.wrap} accessible accessibilityRole="image" accessibilityLabel={`DESJ, ${time}, ${text.toLowerCase()}`}>
       <Animated.View style={[styles.box, box]}>
         <Animated.View style={[{ width: size, height: size }, canvas]}>
-          <NeuralCore size={size} thinking={thinking} labels={display >= 220} active={active} />
+          {/* El corazón va debajo: los nodos del cerebro pasan por encima de su anillo. */}
           <View style={styles.prism}>
             <Prism size={Math.round(size * PRISM_SIZE)} state={state} active={active} />
           </View>
+          <NeuralCore size={size} thinking={thinking} labels={display >= 220} active={active} />
         </Animated.View>
       </Animated.View>
     </View>

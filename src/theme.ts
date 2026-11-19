@@ -60,7 +60,7 @@ export const NEURAL = [
   color('neural-negocios'),
   color('neural-salud'),
   color('neural-pendientes'),
-  color('neural-calendario'),
+  color('neural-alertas'),
 ];
 
 /** Color del prisma (logo y centro del cerebro) en cada estado de DESJ. Solo para el prisma y los íconos. */

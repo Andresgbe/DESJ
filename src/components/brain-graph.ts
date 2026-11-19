@@ -10,7 +10,7 @@ export const CLUSTERS = [
   { label: 'Negocios', share: 0.16, spread: 0.4, dir: [0.45, -0.65, 0.55] },
   { label: 'Salud', share: 0.14, spread: 0.38, dir: [0.15, 0.85, 0.45] },
   { label: 'Pendientes', share: 0.12, spread: 0.36, dir: [-0.3, -0.75, -0.55] },
-  { label: 'Calendario', share: 0.1, spread: 0.34, dir: [0.15, 0.2, -1] },
+  { label: 'Alertas', share: 0.1, spread: 0.34, dir: [0.15, 0.2, -1] },
 ] as const;
 
 export const CLUSTER_COUNT = CLUSTERS.length;
@@ -184,9 +184,10 @@ export function computeFrame(g: Graph, size: number, angle: number, time: number
     pf[i] = f;
   }
 
-  // Claro alrededor del Corazón de DESJ: no se dibujan nodos ni conexiones que caigan sobre él.
-  const clear2 = (size * 0.1) ** 2;
-  const covered = (i: number) => (px[i] - half) ** 2 + (py[i] - half) ** 2 < clear2;
+  // El cerebro se dibuja por encima del Corazón de DESJ: los nodos pasan sobre su anillo, pero sobre el
+  // triángulo solo pasa 1 de cada 10 (y ninguna línea). `triR` es el radio del triángulo.
+  const clear2 = (size * 0.07) ** 2;
+  const covered = (i: number) => (px[i] - half) ** 2 + (py[i] - half) ** 2 < clear2 && (i * 0.618) % 1 >= 0.1;
   // ¿El segmento a→b pasa por el claro? (distancia del centro al segmento)
   const crosses = (a: number, b: number) => {
     const dx = px[b] - px[a];
