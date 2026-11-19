@@ -48,7 +48,7 @@ function normalize(v: number[]) {
   return [v[0] / l, v[1] / l, v[2] / l];
 }
 
-export function buildGraph(n = 1200, seed = 11): Graph {
+export function buildGraph(n = 1700, seed = 11): Graph {
   const rand = seeded(seed);
   const gauss = () => (rand() + rand() + rand() - 1.5) / 1.5;
   const g: Graph = { n: 0, x: [], y: [], z: [], c: [], big: [], hubs: [], edges: [], signals: [] };
@@ -184,10 +184,23 @@ export function computeFrame(g: Graph, size: number, angle: number, time: number
     pf[i] = f;
   }
 
+  // Claro alrededor del Corazón de DESJ: no se dibujan nodos ni conexiones que caigan sobre él.
+  const clear2 = (size * 0.1) ** 2;
+  const covered = (i: number) => (px[i] - half) ** 2 + (py[i] - half) ** 2 < clear2;
+  // ¿El segmento a→b pasa por el claro? (distancia del centro al segmento)
+  const crosses = (a: number, b: number) => {
+    const dx = px[b] - px[a];
+    const dy = py[b] - py[a];
+    const l2 = dx * dx + dy * dy || 1;
+    const t = Math.max(0, Math.min(1, ((half - px[a]) * dx + (half - py[a]) * dy) / l2));
+    return (px[a] + dx * t - half) ** 2 + (py[a] + dy * t - half) ** 2 < clear2;
+  };
+
   const layers = CLUSTER_COUNT * DEPTHS * 2;
   const nodes: Pt[][] = [];
   for (let i = 0; i < layers; i++) nodes.push([]);
   for (let i = CLUSTER_COUNT; i < g.n; i++) {
+    if (covered(i)) continue;
     const d = pd[i] < 0.38 ? 0 : pd[i] < 0.66 ? 1 : 2;
     nodes[(g.c[i] * DEPTHS + d) * 2 + g.big[i]].push({ x: px[i], y: py[i] });
   }
@@ -197,6 +210,7 @@ export function computeFrame(g: Graph, size: number, angle: number, time: number
   for (let e = 0; e < g.edges.length; e += 2) {
     const a = g.edges[e];
     const b = g.edges[e + 1];
+    if (crosses(a, b)) continue;
     const front = pd[a] + pd[b] > 1.05 ? 1 : 0;
     const list = edges[g.c[a] * 2 + front];
     list.push({ x: px[a], y: py[a] }, { x: px[b], y: py[b] });
@@ -218,7 +232,10 @@ export function computeFrame(g: Graph, size: number, angle: number, time: number
     const t = (time * g.signals[s * 3 + 2] * (1 + energy * 2.6) + g.signals[s * 3 + 1]) % 1;
     const a = g.edges[e];
     const b = g.edges[e + 1];
-    signals[g.c[a]].push({ x: px[a] + (px[b] - px[a]) * t, y: py[a] + (py[b] - py[a]) * t });
+    const sx = px[a] + (px[b] - px[a]) * t;
+    const sy = py[a] + (py[b] - py[a]) * t;
+    if ((sx - half) ** 2 + (sy - half) ** 2 < clear2) continue;
+    signals[g.c[a]].push({ x: sx, y: sy });
   }
 
   return { nodes, edges, hubs, signals, k };
