@@ -10,6 +10,9 @@ export type Part = {
   inlineData?: { mimeType: string; data: string };
   functionCall?: { id?: string; name: string; args?: Record<string, unknown> };
   functionResponse?: { id?: string; name: string; response: Record<string, unknown> };
+  /** Búsqueda de Google hecha por Gemini (se reenvían tal cual en el historial). */
+  toolCall?: unknown;
+  toolResponse?: unknown;
 };
 export type Content = { role: 'user' | 'model'; parts: Part[] };
 
@@ -21,7 +24,16 @@ export type ToolDef = {
   strict?: boolean;
 };
 
-export type GenerateResult = { content: Content; finishReason: string | null; blockReason: string | null };
+/** Página web que Gemini consultó con la búsqueda de Google. */
+export type Source = { uri: string; title: string };
+export type GenerateResult = {
+  content: Content;
+  finishReason: string | null;
+  blockReason: string | null;
+  sources: Source[];
+  /** Tokens cobrados (el pensamiento cuenta como salida) y búsquedas de Google hechas. */
+  usage: { input: number; output: number; searches: number };
+};
 
 export class GeminiError extends Error {
   status: number;
@@ -54,18 +66,28 @@ export type GenerateRequest = {
   maxOutputTokens?: number;
   /** 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH': cuánto "piensa" el modelo antes de responder (más = más lento y más caro). */
   thinkingLevel?: string;
+  /** Hora límite (Date.now()) para todo el mensaje: ningún intento se pasa de ahí. */
+  deadline?: number;
+  /** Activa la búsqueda de Google (internet) junto a las herramientas de DESJ. */
+  search?: boolean;
 };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-/** Máximo que se espera una respuesta de Gemini; si no llega, se corta y la persona ve un aviso en vez de esperar sin fin. */
-const TIMEOUT_MS = 50_000;
+/** Máximo que se espera cada intento; además nunca se pasa del `deadline` del mensaje completo. */
+const TIMEOUT_MS = 25_000;
 
 export async function generate(apiKey: string, model: string, req: GenerateRequest): Promise<GenerateResult> {
+  const timeLeft = () => Math.max(1, Math.min(TIMEOUT_MS, (req.deadline ?? Infinity) - Date.now()));
+  if (req.deadline && req.deadline - Date.now() < 3000) throw new GeminiError(408, 'Sin tiempo para otro intento');
+  let withSearch = Boolean(req.search);
   const send = async (withThinking: boolean) => {
+    const tools = [...(withSearch ? [{ googleSearch: {} }] : []), ...(req.tools?.length ? toGeminiTools(req.tools) : [])];
     const body = {
       systemInstruction: { parts: [{ text: req.system }] },
       contents: req.contents,
-      ...(req.tools?.length ? { tools: toGeminiTools(req.tools) } : {}),
+      ...(tools.length ? { tools } : {}),
+      // Para usar la búsqueda junto a las herramientas propias, Gemini pide incluir sus invocaciones en la respuesta.
+      ...(withSearch && req.tools?.length ? { toolConfig: { includeServerSideToolInvocations: true } } : {}),
       generationConfig: {
         maxOutputTokens: req.maxOutputTokens ?? 4096,
         ...(withThinking && req.thinkingLevel ? { thinkingConfig: { thinkingLevel: req.thinkingLevel } } : {}),
@@ -73,7 +95,7 @@ export async function generate(apiKey: string, model: string, req: GenerateReque
     };
     return await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST',
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeLeft()),
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify(body),
     });
@@ -88,15 +110,19 @@ export async function generate(apiKey: string, model: string, req: GenerateReque
     throw e;
   }
   // Un error pasajero (límite o saturación) se reintenta hasta 2 veces, esperando un poco más cada vez.
-  for (let retry = 1; retry <= 2 && (res.status === 429 || res.status === 503); retry++) {
+  for (let retry = 1; retry <= 2 && (res.status === 429 || res.status === 503) && timeLeft() > 5000; retry++) {
     await sleep(1500 * retry);
     res = await send(withThinking);
   }
-  // Si el modelo no acepta el nivel de pensamiento, se repite sin él.
-  if (res.status === 400 && req.thinkingLevel) {
+  // Si el modelo no acepta el nivel de pensamiento o la búsqueda, se repite sin eso.
+  if (res.status === 400) {
     const text = await res.clone().text();
-    if (/thinking/i.test(text)) {
+    if (req.thinkingLevel && /thinking/i.test(text)) {
       withThinking = false;
+      res = await send(withThinking);
+    } else if (withSearch && /search|tool/i.test(text)) {
+      console.error('Gemini sin búsqueda:', text.slice(0, 300));
+      withSearch = false;
       res = await send(withThinking);
     }
   }
@@ -107,7 +133,12 @@ export async function generate(apiKey: string, model: string, req: GenerateReque
   }
 
   const data = (await res.json()) as {
-    candidates?: { content?: Content; finishReason?: string }[];
+    candidates?: {
+      content?: Content;
+      finishReason?: string;
+      groundingMetadata?: { webSearchQueries?: string[]; groundingChunks?: { web?: { uri?: string; title?: string } }[] };
+    }[];
+    usageMetadata?: { promptTokenCount?: number; toolUsePromptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number };
     promptFeedback?: { blockReason?: string };
   };
   const candidate = data.candidates?.[0];
@@ -115,5 +146,13 @@ export async function generate(apiKey: string, model: string, req: GenerateReque
     content: { role: 'model', parts: candidate?.content?.parts ?? [] },
     finishReason: candidate?.finishReason ?? null,
     blockReason: data.promptFeedback?.blockReason ?? null,
+    sources: (candidate?.groundingMetadata?.groundingChunks ?? [])
+      .map((c) => ({ uri: c.web?.uri ?? '', title: c.web?.title ?? '' }))
+      .filter((s) => s.uri),
+    usage: {
+      input: (data.usageMetadata?.promptTokenCount ?? 0) + (data.usageMetadata?.toolUsePromptTokenCount ?? 0),
+      output: (data.usageMetadata?.candidatesTokenCount ?? 0) + (data.usageMetadata?.thoughtsTokenCount ?? 0),
+      searches: candidate?.groundingMetadata?.webSearchQueries?.length ?? 0,
+    },
   };
 }

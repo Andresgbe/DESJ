@@ -7,17 +7,22 @@
 // Secretos (Supabase → Edge Functions → Secrets):
 //   GEMINI_API_KEY     obligatorio (https://aistudio.google.com/apikey)
 //   GEMINI_MODEL       opcional (por defecto gemini-3.8-flash)
-//   GEMINI_THINKING    opcional: MINIMAL, LOW, MEDIUM (por defecto) o HIGH
+//   GEMINI_THINKING    opcional: MINIMAL, LOW (por defecto), MEDIUM o HIGH
+//   AI_MONTHLY_LIMIT_USD  opcional: tope mensual por persona si no tiene fila en ai_limits (por defecto 10)
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-import { type Content, generate, GeminiError, type Part } from './gemini.ts';
+import { type Content, generate, GeminiError, type Part, type Source } from './gemini.ts';
 import { INTERVIEW_PROMPT, SYSTEM_PROMPT } from './prompt.ts';
+import { costOf } from './pricing.ts';
 import { loadAttachment, loadContext, makeTitle } from './context.ts';
 import { Actions, runTool, TOOLS } from './tools.ts';
 
 const MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.8-flash';
-const THINKING = Deno.env.get('GEMINI_THINKING') ?? 'MEDIUM';
+const THINKING = Deno.env.get('GEMINI_THINKING') ?? 'LOW';
+/** Tiempo máximo para responder un mensaje completo (con reintentos, respaldo y herramientas). */
+const BUDGET_MS = 55_000;
+const DEFAULT_LIMIT_USD = Number(Deno.env.get('AI_MONTHLY_LIMIT_USD') ?? '10');
 // Lo que la persona puede elegir en la app (modelo y esfuerzo); cualquier otro valor se ignora.
 const MODELS = ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.1-pro-preview'];
 const EFFORTS = ['LOW', 'MEDIUM', 'HIGH'];
@@ -93,6 +98,12 @@ Deno.serve(async (req) => {
     if (!conv) return json({ error: 'Esa conversación ya no existe.' }, 404);
   }
 
+  // Límite de gasto mensual de la persona: si ya lo alcanzó, no se llama a Gemini.
+  const spent = await monthSpent(db, auth.user.id);
+  if (spent.used >= spent.limit) {
+    return json({ error: `Llegaste al límite de gasto de IA de este mes (USD ${spent.limit.toFixed(2)}). Se renueva el día 1; si necesitas más, pídele a Andrés que lo suba.` }, 402);
+  }
+
   const tCtx = Date.now();
   const ctx = await loadContext(db, auth.user.id, agenda, conversationId, { message, hasFiles: attachments.length > 0, mode });
   console.log(`Contexto cargado en ${Date.now() - tCtx} ms`);
@@ -104,6 +115,10 @@ Deno.serve(async (req) => {
   const system = [SYSTEM_PROMPT, ...(mode === 'conocimiento' ? [INTERVIEW_PROMPT] : []), ctx.block].join('\n\n');
 
   let reply = '';
+  const sources: Source[] = [];
+  let cost = 0;
+  const used = { input: 0, output: 0, searches: 0 };
+  const deadline = Date.now() + BUDGET_MS;
   try {
     for (let step = 0; step < MAX_STEPS; step++) {
       const t0 = Date.now();
@@ -112,7 +127,7 @@ Deno.serve(async (req) => {
       let response: Awaited<ReturnType<typeof generate>> | null = null;
       for (const [i, m] of candidates.entries()) {
         try {
-          response = await generate(apiKey, m, { system, contents, tools: TOOLS, maxOutputTokens: 4096, thinkingLevel: effort });
+          response = await generate(apiKey, m, { system, contents, tools: TOOLS, maxOutputTokens: 4096, thinkingLevel: effort, deadline, search: true });
           model = m;
           break;
         } catch (e) {
@@ -122,6 +137,11 @@ Deno.serve(async (req) => {
         }
       }
       if (!response) throw new GeminiError(503, 'sin respuesta');
+      for (const s of response.sources) if (!sources.some((x) => x.title === s.title)) sources.push(s);
+      cost += costOf(model, response.usage);
+      used.input += response.usage.input;
+      used.output += response.usage.output;
+      used.searches += response.usage.searches;
       console.log(`Gemini ${model} ${effort} paso ${step + 1}: ${Date.now() - t0} ms, fin=${response.finishReason}, partes=${response.content.parts.length}`);
 
       if (response.blockReason || response.finishReason === 'SAFETY' || response.finishReason === 'PROHIBITED_CONTENT') {
@@ -168,6 +188,7 @@ Deno.serve(async (req) => {
     }
   } catch (e) {
     console.error('Gemini', e);
+    await saveUsage(db, model, used, cost); // lo que se gastó en los pasos que sí respondieron
     if (e instanceof GeminiError) {
       if (e.status === 408) return json({ error: 'DESJ tardó demasiado en responder. Intenta de nuevo o elige un modelo más rápido.' }, 504);
       if (e.status === 429) return json({ error: 'DESJ está ocupado, intenta en un momento.' }, 429);
@@ -177,7 +198,10 @@ Deno.serve(async (req) => {
     return json({ error: 'No pude conectar con el cerebro de DESJ.' }, 502);
   }
 
+  await saveUsage(db, model, used, cost);
   if (!reply) reply = 'Listo.';
+  // Si buscó en internet, se nombran las fuentes al final (los sitios, no los enlaces largos de Google).
+  if (sources.length) reply += `\n\nFuentes: ${sources.slice(0, 4).map((s) => s.title).join(', ')}.`;
 
   let title: string | null = null;
   if (!conversationId) {
@@ -199,6 +223,27 @@ Deno.serve(async (req) => {
 
   return json({ reply, actions, conversation_id: conversationId, title });
 });
+
+/** Gasto estimado de la persona en el mes en curso (UTC) y su límite. */
+async function monthSpent(db: SupabaseClient, userId: string) {
+  const now = new Date();
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+  const [rows, lim] = await Promise.all([
+    db.from('ai_usage').select('cost_usd').eq('user_id', userId).gte('created_at', start),
+    db.from('ai_limits').select('monthly_usd').eq('user_id', userId).maybeSingle(),
+  ]);
+  if (rows.error) console.error('leer gasto', rows.error);
+  const used = (rows.data ?? []).reduce((sum, r) => sum + Number((r as { cost_usd: number }).cost_usd), 0);
+  const limit = lim.data ? Number((lim.data as { monthly_usd: number }).monthly_usd) : DEFAULT_LIMIT_USD;
+  return { used, limit };
+}
+
+async function saveUsage(db: SupabaseClient, model: string, u: { input: number; output: number; searches: number }, cost: number) {
+  if (!u.input && !u.output && !u.searches) return;
+  const { error } = await db.from('ai_usage').insert({ model, input_tokens: u.input, output_tokens: u.output, searches: u.searches, cost_usd: Number(cost.toFixed(6)) });
+  if (error) console.error('guardar gasto', error);
+  console.log(`Gasto: ${u.input} entrada, ${u.output} salida, ${u.searches} búsquedas = USD ${cost.toFixed(5)} (${model})`);
+}
 
 function errorText(e: unknown) {
   if (e instanceof Error) return e.message;

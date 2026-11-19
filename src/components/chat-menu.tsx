@@ -5,7 +5,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { Easing, FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { IconMenu } from '@/components/icons';
-import { AI_EFFORTS, AI_MODELS, setAiSettings, useAiSettings } from '@/lib/ai-settings';
+import { AI_EFFORTS, AI_MODELS, loadMonthSpend, setAiSettings, useAiSettings } from '@/lib/ai-settings';
 import { Label } from '@/components/ui';
 import { useChats } from '@/lib/chats';
 import { useLayout } from '@/lib/layout';
@@ -34,6 +34,7 @@ export function ChatMenu({
   // Cada toque pasa a la siguiente opción de la lista y el menú sigue abierto.
   const next = <T extends string>(list: readonly { id: T }[], id: T): T => list[(list.findIndex((x) => x.id === id) + 1) % list.length].id;
   const [open, setOpen] = useState(false);
+  const [spend, setSpend] = useState<{ used: number; limit: number } | null>(null);
   const [pos, setPos] = useState({ top: 60, left: 16 });
   const btn = useRef<View>(null);
   const { header: h } = useLayout();
@@ -44,6 +45,7 @@ export function ChatMenu({
     // (en web el contenido es una columna centrada, así que se mide el botón y no la ventana).
     btn.current?.measureInWindow((x, y, _w, h) => setPos({ top: y + h + 8, left: Math.max(16, x) }));
     setOpen(true);
+    loadMonthSpend().then(setSpend, () => setSpend(null));
   };
 
   const run = (fn: () => void) => () => {
@@ -93,6 +95,14 @@ export function ChatMenu({
             checked
             onPress={() => setAiSettings({ effort: next(AI_EFFORTS, ai.effort) })}
           />
+          {spend ? (
+            <View style={styles.spend} accessibilityLabel={`Gasto de IA este mes: ${spend.used.toFixed(2)} de ${spend.limit.toFixed(2)} dólares`}>
+              <Text style={styles.itemTitle}>Gasto de IA este mes</Text>
+              <Text style={[styles.sub, spend.used >= spend.limit && { color: C.bad }]}>
+                {`USD ${spend.used.toFixed(2)} de ${spend.limit.toFixed(2)}${spend.used >= spend.limit ? ' · límite alcanzado' : ''}`}
+              </Text>
+            </View>
+          ) : null}
           {onBack ? <Item title="Volver a DESJ" sub="Ocultar la conversación" onPress={run(onBack)} /> : null}
         </Animated.View>
       </Modal>
@@ -147,6 +157,7 @@ const styles = StyleSheet.create({
   },
   head: { gap: 2, padding: 10, borderBottomWidth: 1, borderBottomColor: C.cardBorder, marginBottom: 4 },
   title: { color: C.text, fontSize: 15, fontWeight: '700' },
+  spend: { minHeight: 52, justifyContent: 'center', paddingHorizontal: 10 },
   item: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, borderRadius: 10 },
   itemTitle: { color: C.text, fontSize: 15 },
   sub: { color: C.muted, fontSize: 12 },

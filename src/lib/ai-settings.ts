@@ -19,7 +19,7 @@ export const AI_EFFORTS = [
 export type AiSettings = { model: (typeof AI_MODELS)[number]['id']; effort: (typeof AI_EFFORTS)[number]['id'] };
 
 const KEY = 'desj.ia';
-const DEFAULTS: AiSettings = { model: 'gemini-3.8-flash', effort: 'MEDIUM' };
+const DEFAULTS: AiSettings = { model: 'gemini-3.8-flash', effort: 'LOW' };
 
 function read(): AiSettings {
   try {
@@ -57,4 +57,25 @@ export function useAiSettings() {
     getAiSettings,
     getAiSettings,
   );
+}
+
+/** Tope mensual cuando la persona no tiene fila en `ai_limits` (el mismo que usa la Edge Function). */
+const DEFAULT_LIMIT_USD = 10;
+
+/** Gasto estimado de IA del mes en curso (UTC) y el límite de la persona. `null` sin nube o sin sesión. */
+export async function loadMonthSpend(): Promise<{ used: number; limit: number } | null> {
+  const { cloudEnabled, supabase } = await import('@/lib/supabase');
+  if (!cloudEnabled) return null;
+  const { data: auth } = await supabase.auth.getSession();
+  const userId = auth.session?.user.id;
+  if (!userId) return null;
+  const now = new Date();
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+  const [rows, lim] = await Promise.all([
+    supabase.from('ai_usage').select('cost_usd').eq('user_id', userId).gte('created_at', start),
+    supabase.from('ai_limits').select('monthly_usd').eq('user_id', userId).maybeSingle(),
+  ]);
+  if (rows.error) return null;
+  const used = (rows.data ?? []).reduce((sum, r) => sum + Number(r.cost_usd), 0);
+  return { used, limit: lim.data ? Number(lim.data.monthly_usd) : DEFAULT_LIMIT_USD };
 }

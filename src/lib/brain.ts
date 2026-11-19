@@ -62,7 +62,7 @@ const failure = (reply: string, conversationId: string | null): AskResult => ({
 async function askApi(text: string, conversationId: string | null, mode: Mode, agenda: unknown, attachments: Uploaded[]): Promise<AskResult> {
   const { data, error } = await supabase.functions.invoke<ChatReply>('chat', {
     body: { message: text, agenda, conversation_id: conversationId, mode, attachments, ...getAiSettings() },
-    timeout: 100_000, // si la función no responde en este tiempo, se avisa en vez de esperar sin fin
+    timeout: 70_000, // si la función no responde en este tiempo, se avisa en vez de esperar sin fin
   });
   if (error || !data) {
     let msg = 'No pude conectarme. Revisa tu internet e intenta de nuevo.';
