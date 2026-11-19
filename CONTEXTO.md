@@ -254,7 +254,7 @@ Inspirada en el carrusel de Adrián y en los grafos tipo "Jarvis": fondo casi ne
 | `cardBorder` | `#15294D` | bordes |
 | `border` | `#2763B8` | bordes destacados |
 | `accent` | `#2F9BFF` | botones principales, día de hoy |
-| `neural-*` | azules, cian, índigo, verde azulado | grupos del cerebro (solo ahí) |
+| `neural-*` | azules, cian, verde azulado y rojo | grupos del cerebro (solo ahí) |
 | `accentSoft` | `#8FD0FF` | links, horas |
 | `accentText` | `#5CC2FF` | palabra resaltada del título |
 | `text` | `#E6F2FF` | texto |

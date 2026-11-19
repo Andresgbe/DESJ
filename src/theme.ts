@@ -59,7 +59,6 @@ export const NEURAL = [
   color('neural-conocimiento'),
   color('neural-negocios'),
   color('neural-salud'),
-  color('neural-pendientes'),
   color('neural-alertas'),
 ];
 

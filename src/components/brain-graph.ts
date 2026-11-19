@@ -5,12 +5,11 @@
 
 /** Grupos del cerebro: los módulos de DESJ. El color de cada uno es NEURAL[i] en theme.ts. */
 export const CLUSTERS = [
-  { label: 'Memoria', share: 0.34, spread: 0.5, dir: [-1, 0.05, 0.25] },
-  { label: 'Conocimiento', share: 0.18, spread: 0.42, dir: [0.95, 0.25, -0.2] },
-  { label: 'Negocios', share: 0.16, spread: 0.4, dir: [0.45, -0.65, 0.55] },
-  { label: 'Salud', share: 0.14, spread: 0.38, dir: [0.15, 0.85, 0.45] },
-  { label: 'Pendientes', share: 0.12, spread: 0.36, dir: [-0.3, -0.75, -0.55] },
-  { label: 'Alertas', share: 0.1, spread: 0.34, dir: [0.15, 0.2, -1] },
+  { label: 'Memoria', share: 0.37, spread: 0.5, dir: [-1, 0.05, 0.25] },
+  { label: 'Conocimiento', share: 0.2, spread: 0.42, dir: [0.95, 0.25, -0.2] },
+  { label: 'Negocios', share: 0.17, spread: 0.4, dir: [0.45, -0.65, 0.55] },
+  { label: 'Salud', share: 0.15, spread: 0.38, dir: [0.15, 0.85, 0.45] },
+  { label: 'Alertas', share: 0.11, spread: 0.34, dir: [0.15, 0.2, -1] },
 ] as const;
 
 export const CLUSTER_COUNT = CLUSTERS.length;
