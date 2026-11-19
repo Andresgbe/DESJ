@@ -6,6 +6,17 @@ import type { PropsWithChildren } from 'react';
 
 import { C } from '@/theme';
 
+// Barra de desplazamiento fina y oscura (en vez de la blanca del navegador): casi invisible hasta que se usa.
+const SCROLLBAR_CSS = `
+html, body { background-color: ${C.bg}; color-scheme: dark; }
+* { scrollbar-width: thin; scrollbar-color: ${C.border} transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track, *::-webkit-scrollbar-corner { background: transparent; }
+*::-webkit-scrollbar-thumb { background-color: ${C.border}; border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background-color: ${C.accent}; }
+*::-webkit-scrollbar-button { display: none; }
+`;
+
 export default function Root({ children }: PropsWithChildren) {
   const { headNodes, bodyNodes, htmlAttributes, bodyAttributes } = useServerDocumentContext();
 
@@ -25,7 +36,7 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
         <ScrollViewStyleReset />
-        <style dangerouslySetInnerHTML={{ __html: `html, body { background-color: ${C.bg}; }` }} />
+        <style dangerouslySetInnerHTML={{ __html: SCROLLBAR_CSS }} />
         {headNodes}
       </head>
       <body {...bodyAttributes}>

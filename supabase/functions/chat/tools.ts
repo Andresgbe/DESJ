@@ -1,7 +1,7 @@
-// Herramientas que Claude puede usar. Las usan la Edge Function `chat` (cliente con la sesión del
+// Herramientas que Gemini puede usar. Las usan la Edge Function `chat` (cliente con la sesión del
 // usuario, RLS) y el worker local (desj-worker, clave de servidor). Por eso cada consulta lleva
 // además user_id explícito: así ninguna herramienta puede tocar datos de otra persona en ningún caso.
-import type Anthropic from '@anthropic-ai/sdk';
+import type { ToolDef } from './gemini.ts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { fetchRates, RATE_CODE_MAP } from '../_shared/dolar.ts';
@@ -22,20 +22,20 @@ export type Actions = {
 export const KNOWLEDGE_FILES = ['perfil', 'salud', 'negocios', 'preferencias'];
 const SLUG = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
-/** Un archivo de Storage que Claude debe ver (adjunto del chat o archivo de un examen). */
+/** Un archivo de Storage que Gemini debe ver (adjunto del chat o archivo de un examen). */
 export type FileRef = { path: string; name: string; mime: string };
-/** Lo que devuelve una herramienta: texto, o texto más archivos para que Claude los lea. */
+/** Lo que devuelve una herramienta: texto, o texto más archivos para que Gemini los lea. */
 export type ToolOutput = string | { text: string; files: FileRef[] };
 
 const EXAM_KINDS = ['consulta', 'laboratorio', 'imagen', 'procedimiento', 'otro'];
 const EXAM_TITLES: Record<string, string> = { consulta: 'Consulta médica', laboratorio: 'Examen de laboratorio', imagen: 'Estudio de imagen', procedimiento: 'Procedimiento', otro: 'Registro médico' };
 const DOC_TYPES = ['informe', 'orden', 'resultado', 'receta', 'imagen', 'otro'];
 const CONTACT_KINDS = ['doctor', 'clinica', 'laboratorio', 'otro'];
-const MAX_READ_FILES = 3; // archivos de un registro que se le pasan a Claude de una vez
+const MAX_READ_FILES = 3; // archivos de un registro que se le pasan a Gemini de una vez
 
 const CATEGORIES = ['personal', 'salud', 'negocios', 'preferencia', 'otro'];
 
-export const TOOLS: Anthropic.Tool[] = [
+export const TOOLS: ToolDef[] = [
   {
     name: 'actualizar_conocimiento',
     description:

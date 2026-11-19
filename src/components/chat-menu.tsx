@@ -5,6 +5,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { Easing, FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { IconMenu } from '@/components/icons';
+import { AI_EFFORTS, AI_MODELS, setAiSettings, useAiSettings } from '@/lib/ai-settings';
 import { Label } from '@/components/ui';
 import { useChats } from '@/lib/chats';
 import { useLayout } from '@/lib/layout';
@@ -27,6 +28,11 @@ export function ChatMenu({
   onBack?: () => void;
 }) {
   const { conversations, activeId, busy, newChat } = useChats();
+  const ai = useAiSettings();
+  const model = AI_MODELS.find((m) => m.id === ai.model) ?? AI_MODELS[1];
+  const effort = AI_EFFORTS.find((e) => e.id === ai.effort) ?? AI_EFFORTS[1];
+  // Cada toque pasa a la siguiente opción de la lista y el menú sigue abierto.
+  const next = <T extends string>(list: readonly { id: T }[], id: T): T => list[(list.findIndex((x) => x.id === id) + 1) % list.length].id;
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 60, left: 16 });
   const btn = useRef<View>(null);
@@ -72,6 +78,20 @@ export function ChatMenu({
             role="switch"
             checked={voice}
             onPress={run(() => onVoice(!voice))}
+          />
+          <Item
+            title="Modelo de IA"
+            sub={model.sub}
+            state={model.label.toUpperCase()}
+            checked
+            onPress={() => setAiSettings({ model: next(AI_MODELS, ai.model) })}
+          />
+          <Item
+            title="Nivel de esfuerzo"
+            sub={effort.sub}
+            state={effort.label.toUpperCase()}
+            checked
+            onPress={() => setAiSettings({ effort: next(AI_EFFORTS, ai.effort) })}
           />
           {onBack ? <Item title="Volver a DESJ" sub="Ocultar la conversación" onPress={run(onBack)} /> : null}
         </Animated.View>

@@ -2,7 +2,7 @@
 // (desj-worker). Toda consulta filtra por userId: con la sesión del usuario (RLS) es redundante, y con la
 // clave de servidor del worker es lo que garantiza que nunca se mezclen datos entre personas.
 // Sin dependencias de Deno: el worker lo importa directo con Node.
-import type Anthropic from '@anthropic-ai/sdk';
+import type { Content, Part } from './gemini.ts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const HISTORY = 20; // mensajes previos que se reenvían
@@ -16,7 +16,7 @@ export const SECTIONS: Section[] = ['salud', 'finanzas', 'modulos'];
 
 // Palabras que delatan el tema de un mensaje (sin tildes, en minúsculas). Conocimiento se lee siempre; cada
 // área solo cuando el mensaje (o lo último de la conversación) habla de ella: así el contexto es más corto y
-// DESJ responde más rápido. Si se equivoca, Claude puede pedir el área con la herramienta abrir_seccion.
+// DESJ responde más rápido. Si se equivoca, Gemini puede pedir el área con la herramienta abrir_seccion.
 const TOPICS: Record<Section, RegExp> = {
   salud:
     /salud|medic|doctor|\bdra?\b|pastill|dosis|tom(e|o|ar|aste)\b|examen|consulta|informe|orden|receta|laborator|clinic|sintom|dolor|presion|tension|glucosa|colesterol|vacuna|alergi|hospital|\bcita|cardio|resultado|analisis|hemat|sangre|enferm|fiebre|gripe|tratamiento|operaci|cirug/,
@@ -123,7 +123,7 @@ ${d.content.trim() || '[vacío: todavía no hay datos]'}
   // El historial viene del más nuevo al más viejo; se invierte y debe empezar con un mensaje del usuario.
   const rows = (history.data ?? []).reverse();
   while (rows.length && rows[0].role !== 'user') rows.shift();
-  const historyMsgs: Anthropic.MessageParam[] = rows.map((r) => ({ role: r.role as 'user' | 'assistant', content: r.content }));
+  const historyMsgs: Content[] = rows.map((r) => ({ role: r.role === 'assistant' ? 'model' : 'user', parts: [{ text: String(r.content) }] }));
 
   return { block: lines.join('\n'), today, history: historyMsgs, sections };
 }
@@ -286,31 +286,26 @@ function moduleLines(modules: ModuleRow[], vehicles: Vehicles): string[] {
 }
 
 export const MAX_FILE = 10 * 1024 * 1024;
-const MAX_IMAGE = 5 * 1024 * 1024; // límite de Claude por imagen
-const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const;
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'] as const;
 
-/** Descarga el adjunto de Storage y lo convierte en un bloque que Claude entiende (imagen, PDF o texto). */
+/** Descarga el adjunto de Storage y lo convierte en una parte que Gemini entiende (imagen, PDF o texto). */
 export async function loadAttachment(
   db: SupabaseClient,
   a: { path: string; name: string; mime: string },
-): Promise<{ block: Anthropic.ContentBlockParam } | { error: string }> {
+): Promise<{ part: Part } | { error: string }> {
   const { data, error } = await db.storage.from('documentos').download(a.path);
   if (error || !data) return { error: 'No encontré el archivo adjunto.' };
   if (data.size > MAX_FILE) return { error: 'El archivo pesa más de 10 MB.' };
   const bytes = new Uint8Array(await data.arrayBuffer());
 
-  const image = IMAGE_TYPES.find((t) => t === a.mime);
-  if (image) {
-    if (bytes.length > MAX_IMAGE) return { error: 'La imagen pesa más de 5 MB.' };
-    return { block: { type: 'image', source: { type: 'base64', media_type: image, data: toBase64(bytes) } } };
-  }
-  if (a.mime === 'application/pdf') {
-    return { block: { type: 'document', title: a.name, source: { type: 'base64', media_type: 'application/pdf', data: toBase64(bytes) } } };
+  if (IMAGE_TYPES.some((t) => t === a.mime) || a.mime === 'application/pdf') {
+    return { part: { inlineData: { mimeType: a.mime, data: toBase64(bytes) } } };
   }
   if (a.mime.startsWith('text/')) {
-    return { block: { type: 'document', title: a.name, source: { type: 'text', media_type: 'text/plain', data: new TextDecoder().decode(bytes) } } };
+    return { part: { text: `Contenido de "${a.name}":
+${new TextDecoder().decode(bytes)}` } };
   }
-  return { error: 'Por ahora DESJ lee fotos, PDF y archivos de texto.' };
+  return { error: 'Por ahora DESJ lee fotos (JPG, PNG, WebP, HEIC), PDF y archivos de texto.' };
 }
 
 export function toBase64(bytes: Uint8Array) {

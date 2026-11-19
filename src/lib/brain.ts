@@ -1,10 +1,10 @@
-// Cerebro de DESJ. Con sesión hay dos motores, según `profiles.brain` de cada persona:
-// - 'worker': la app deja el mensaje en una cola de Supabase y el worker del computador de Andrés
-//   (desj-worker/) lo responde con Claude Code y su suscripción. Solo responde con ese computador prendido.
-// - 'api': la Edge Function `chat` responde con la API de Claude (API key en Supabase, nunca en la app), 24/7.
+// Cerebro de DESJ. Con sesión, la Edge Function `chat` responde con Gemini (API key en los secretos de
+// Supabase, nunca en la app), 24/7. Ya no hay worker ni suscripción de Claude: `retryQueue` solo queda para
+// mensajes viejos que hayan quedado en cola.
 // Sin nube: `think()` responde con reglas simples en el teléfono (modo demo).
 import { FunctionsHttpError } from '@supabase/supabase-js';
 
+import { getAiSettings } from '@/lib/ai-settings';
 import type { Uploaded } from '@/lib/attachments';
 import { createCalendarEvent, getTodayAgenda } from '@/lib/calendar';
 import { askPermission } from '@/lib/notifications';
@@ -28,7 +28,6 @@ type Mode = 'chat' | 'conocimiento';
 
 const QUEUE_POLL_MS = 1500;
 const QUEUE_OFFLINE_MS = 25_000; // si nadie toma el mensaje en este tiempo, el worker está apagado
-const QUEUE_TIMEOUT_MS = 200_000;
 const RETRY_PER_MESSAGE_MS = 200_000; // tiempo máximo que se espera cada mensaje al reintentar
 const RETRY_LIMIT = 50; // por toque de "Reintentar"; si hay más, el botón sigue a la vista para el resto
 
@@ -36,12 +35,8 @@ const RETRY_LIMIT = 50; // por toque de "Reintentar"; si hay más, el botón sig
 export async function askDesj(text: string, conversationId: string | null, mode: Mode = 'chat', attachments: Uploaded[] = []): Promise<AskResult> {
   const agenda = await getTodayAgenda().catch(() => null);
   const { data: auth } = await supabase.auth.getSession();
-  const userId = auth.session?.user.id;
-  if (!userId) return failure('Tu sesión expiró. Vuelve a entrar.', conversationId);
-  const { data: profile } = await supabase.from('profiles').select('brain').eq('id', userId).single();
-  return profile?.brain === 'api'
-    ? askApi(text, conversationId, mode, agenda, attachments)
-    : askQueue(text, conversationId, mode, agenda, attachments);
+  if (!auth.session?.user.id) return failure('Tu sesión expiró. Vuelve a entrar.', conversationId);
+  return askApi(text, conversationId, mode, agenda, attachments);
 }
 
 /** Lo que ve la persona cuando DESJ falla por algo técnico (nunca el error en inglés ni códigos). */
@@ -66,7 +61,8 @@ const failure = (reply: string, conversationId: string | null): AskResult => ({
 
 async function askApi(text: string, conversationId: string | null, mode: Mode, agenda: unknown, attachments: Uploaded[]): Promise<AskResult> {
   const { data, error } = await supabase.functions.invoke<ChatReply>('chat', {
-    body: { message: text, agenda, conversation_id: conversationId, mode, attachments },
+    body: { message: text, agenda, conversation_id: conversationId, mode, attachments, ...getAiSettings() },
+    timeout: 100_000, // si la función no responde en este tiempo, se avisa en vez de esperar sin fin
   });
   if (error || !data) {
     let msg = 'No pude conectarme. Revisa tu internet e intenta de nuevo.';
@@ -78,62 +74,6 @@ async function askApi(text: string, conversationId: string | null, mode: Mode, a
   }
   const done = await runActions(data.reply, data.actions);
   return { ...done, conversationId: data.conversation_id, failed: false };
-}
-
-/** Motor 'worker': deja el mensaje en la cola y espera la respuesta del computador de Andrés. */
-async function askQueue(text: string, conversationId: string | null, mode: Mode, agenda: unknown, attachments: Uploaded[]): Promise<AskResult> {
-  let convId = conversationId;
-  if (!convId) {
-    const clean = (text || attachments[0]?.name || 'Archivo').replace(/\s+/g, ' ').trim();
-    const title = clean.length > 60 ? `${clean.slice(0, 57).trimEnd()}…` : clean;
-    const { data, error } = await supabase.from('conversations').insert({ title, kind: mode }).select('id').single();
-    if (error || !data) return failure('No pude conectarme. Revisa tu internet e intenta de nuevo.', null);
-    convId = data.id as string;
-  }
-
-  const { data: mine, error } = await supabase
-    .from('messages')
-    .insert({
-      conversation_id: convId,
-      role: 'user',
-      content: [text, ...attachments.map((a) => `[Adjunto: ${a.name}]`)].filter(Boolean).join('\n'),
-      status: 'pending',
-      context: { agenda },
-      attachments: attachments.length ? attachments : null,
-      // El primero también va en las columnas viejas, por compatibilidad.
-      attachment_path: attachments[0]?.path ?? null,
-      attachment_name: attachments[0]?.name ?? null,
-      attachment_mime: attachments[0]?.mime ?? null,
-    })
-    .select('id, created_at')
-    .single();
-  if (error || !mine) return failure('No pude enviar tu mensaje. Revisa tu internet e intenta de nuevo.', convId);
-
-  const conv = convId;
-  const started = Date.now();
-  while (Date.now() - started < QUEUE_TIMEOUT_MS) {
-    await new Promise((r) => setTimeout(r, QUEUE_POLL_MS));
-    const { data: row } = await supabase.from('messages').select('status, error').eq('id', mine.id).single();
-    if (!row) continue;
-    if (row.status === 'error') return failure(friendlyError(row.error), convId);
-    if (row.status === 'done') {
-      const answer = await findAnswer(mine.id, conv, mine.created_at);
-      if (!answer) return failure('DESJ respondió pero no pude leer la respuesta. Abre la conversación de nuevo.', convId);
-      const done = await runActions(answer.content, (answer.actions as Actions | null) ?? null);
-      return { ...done, conversationId: convId, failed: false };
-    }
-    if (row.status === 'pending' && Date.now() - started > QUEUE_OFFLINE_MS) {
-      return {
-        reply: 'DESJ está desconectado en este momento (el computador que lo atiende está apagado). Tu mensaje quedó en cola: toca "Reintentar conexión" cuando vuelva.',
-        dataChanged: false,
-        knowledgeChanged: false,
-        conversationId: convId,
-        failed: false,
-        queued: true,
-      };
-    }
-  }
-  return { reply: 'DESJ está tardando más de lo normal. La respuesta aparecerá en esta conversación cuando esté lista.', dataChanged: false, knowledgeChanged: false, conversationId: convId, failed: false };
 }
 
 /** La respuesta del worker a un mensaje: la que lo cita en `context.reply_to` o, si es de un worker viejo, la siguiente de la conversación. */

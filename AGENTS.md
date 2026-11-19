@@ -11,7 +11,7 @@ DESJ is a personal AI assistant ("JARVIS"-style) iPhone app for two users: Steve
 
 ```
 iPhone app (Expo SDK 57, Expo Router, TypeScript)
-  └─ src/lib/brain.ts askDesj() ──► Supabase Edge Function `chat` ──► Claude API (tool use)
+  └─ src/lib/brain.ts askDesj() ──► Supabase Edge Function `chat` ──► Gemini API (function calling)
                                        │ uses the user's JWT, so every query goes through RLS
                                        ▼
                         Supabase project DESJ (ref ffdddvzpoczaljcqlwhc, us-west-2)
@@ -20,9 +20,9 @@ iPhone app (Expo SDK 57, Expo Router, TypeScript)
 
 - **Two modes.** Without `.env` the app runs **local** (AsyncStorage, rule-based `think()` in `brain.ts`). With `.env` (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`) it requires login and uses Supabase. Every data module (`store.tsx`, `chats.tsx`, `knowledge.ts`, `tasks.ts`, `reminders.ts`) supports both; keep it that way.
 - **Privacy is the core rule.** Every table has `user_id default auth.uid()` and RLS "own rows only". New tables must follow the same pattern (add them to the policy loop in the migration). Never use the service-role or secret key in the app or the Edge Function.
-- **Two brains, chosen per person by `profiles.brain`.** `worker` (default today): the app queues the message (`messages.status = 'pending'`) and `desj-worker/` on Andrés's PC answers it with Claude Code on his subscription, locked to the DESJ MCP server (`--strict-mcp-config`, `--allowedTools mcp__desj__*`, `dontAsk`, no shell, user text only via stdin/file). Only for Andrés's account (`DESJ_NEXUS_USER_ID`) it also gets the NEXUS MCP (`../career-os/mcp-server`, `mcp__nexus__*`) to manage his NEXUS platform; never give it to anyone else. It only answers while that PC is on. `api`: the Edge Function answers with the Claude API, 24/7. Both use the same `prompt.ts`, `tools.ts` and `context.ts` (the worker imports them directly with Node 24); every tool and context query filters by an explicit `userId`.
-- **Claude API.** The API key lives only in Supabase Edge Function secrets (`ANTHROPIC_API_KEY`, optional `CLAUDE_MODEL`, default `claude-sonnet-5`). Never put an API key in the app, `.env` or the repo, and never ask the user to paste one in chat.
-- **Context Claude reads on every message** (built in `supabase/functions/chat/index.ts`): profile, the four **knowledge files** (`perfil.md`, `salud.md`, `negocios.md`, `preferencias.md`), memories, meds, reminders, pending tasks, today's phone agenda and the conversation history. Fixed instructions are in `prompt.ts` (cached; keep per-user or time-dependent text out of it). Tools are in `tools.ts`.
+- **One brain: Gemini (since 19 Nov 2026).** The app calls the Edge Function `chat`, which answers with Gemini (`supabase/functions/chat/gemini.ts`, plain REST `generateContent`), 24/7. The old Claude worker (`desj-worker/`, subscription on Andrés's PC, queue in `messages.status`) is retired: the app no longer queues messages and `profiles.brain` is always `api`. Every tool and context query filters by an explicit `userId`.
+- **Gemini API.** The API key lives only in Supabase Edge Function secrets (`GEMINI_API_KEY`, optional `GEMINI_MODEL`, default `gemini-3.8-flash`, and `GEMINI_THINKING`, default `MEDIUM`). Never put an API key in the app, `.env` or the repo, and never ask the user to paste one in chat.
+- **Context Gemini reads on every message** (built in `supabase/functions/chat/index.ts`): profile, the four **knowledge files** (`perfil.md`, `salud.md`, `negocios.md`, `preferencias.md`), memories, meds, reminders, pending tasks, today's phone agenda and the conversation history. Fixed instructions are in `prompt.ts` (keep per-user or time-dependent text out of it). Tools are in `tools.ts`.
 - **Phone-side actions.** The function returns `actions` (reminders, calendar events…); the phone executes them (local notifications, `expo-calendar`).
 
 ## Supabase workflow
