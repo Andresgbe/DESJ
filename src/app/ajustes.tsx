@@ -2,10 +2,11 @@
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { useCallback, useEffect, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet } from 'react-native';
 
 import { useFocusEffect } from 'expo-router';
 
+import { Text } from '@/components/text';
 import { Btn } from '@/components/form';
 import { Card, Label, Row } from '@/components/ui';
 import { useAuth } from '@/lib/auth';

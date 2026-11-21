@@ -2,7 +2,7 @@
 // tiene su propia vista y sus datos: hoy Negocios (uno por persona), Vehículo (uno por carro o moto, con su
 // ficha, mantenimientos y papeles en lib/vehicles.ts) NO MORE (uno por persona, con PIN; lib/nomore.ts)
 // TO BUY (lista de compras con categorías; lib/tobuy.ts), Universidad (lib/university.ts), Horarios
-// (lib/schedules.ts) y Goals (lib/goals.ts).
+// (lib/schedules.ts), Goals (lib/goals.ts) y Finanzas (lib/finance.ts; sus datos son de la persona, no del módulo).
 // - Con sesión: viven en Supabase (privados por usuario). DESJ los ve desde el chat.
 // - Sin nube: viven en el teléfono; la primera vez se arranca con Negocios.
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -11,7 +11,7 @@ import { useCallback, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 
-export type ModuleKind = 'negocios' | 'vehiculo' | 'nomore' | 'tobuy' | 'universidad' | 'horarios' | 'goals';
+export type ModuleKind = 'negocios' | 'vehiculo' | 'nomore' | 'tobuy' | 'universidad' | 'horarios' | 'goals' | 'finanzas';
 
 /** El catálogo: lo que se puede agregar. `multiple`: se puede tener más de uno (un vehículo por carro). */
 export const CATALOG: { kind: ModuleKind; label: string; description: string; multiple: boolean }[] = [
@@ -50,6 +50,12 @@ export const CATALOG: { kind: ModuleKind; label: string; description: string; mu
     kind: 'goals',
     label: 'Goals',
     description: 'Tus metas a corto, mediano y largo plazo por categoría (finanzas, universidad, escritura…), con fecha, avance y pasos.',
+    multiple: false,
+  },
+  {
+    kind: 'finanzas',
+    label: 'Finanzas',
+    description: 'Ingresos, gastos, deudas y presupuesto, todo llevado a dólar BCV para sumar bolívares, dólares, USDT y euros.',
     multiple: false,
   },
 ];

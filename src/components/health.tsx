@@ -3,8 +3,9 @@
 import { Image } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
-import { Linking, Modal, Platform, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { Linking, Modal, Platform, Pressable, StyleSheet, View, ViewStyle } from 'react-native';
 
+import { Text } from '@/components/text';
 import { DateField } from '@/components/date-field';
 import { Btn, Choice, Field } from '@/components/form';
 import { IconChevron, IconClip, IconFile } from '@/components/icons';

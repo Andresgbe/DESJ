@@ -25,7 +25,7 @@ import { Easing, useDerivedValue, useFrameCallback, useSharedValue, withTiming }
 
 import { buildGraph, CLUSTER_COUNT, CLUSTERS, computeFrame, DEPTHS, NODE_STYLE, type Frame } from '@/components/brain-graph';
 import { useMotion } from '@/lib/motion';
-import { C, mono, NEURAL } from '@/theme';
+import { C, monoSystem, NEURAL } from '@/theme';
 
 /** `active={false}` pausa el giro (p. ej. cuando la pantalla no está a la vista). */
 export type NeuralCoreProps = { size: number; thinking?: boolean; labels?: boolean; active?: boolean };
@@ -119,7 +119,7 @@ export function NeuralCore({ size, thinking = false, labels = true, active = tru
   const { font, widths } = useMemo(() => {
     if (!labels || size < 220) return { font: null, widths: [] as number[] };
     try {
-      const f = matchFont({ fontFamily: mono, fontSize: Math.round(9 * Math.max(1, size / 320)) });
+      const f = matchFont({ fontFamily: monoSystem, fontSize: Math.round(9 * Math.max(1, size / 320)) });
       return { font: f, widths: graph.hubs.map((_, c) => f.measureText(CLUSTERS[c].label).width) };
     } catch {
       return { font: null, widths: [] as number[] };

@@ -2,9 +2,10 @@
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
+import { Text, TextInput } from '@/components/text';
 import { IconClose } from '@/components/icons';
 import { Card, Label, Row, Screen, Title } from '@/components/ui';
 import { confirm } from '@/lib/confirm';

@@ -1,8 +1,9 @@
 // Piezas del módulo NO MORE: teclado del PIN, tarjeta de cada cosa que se está dejando (contador en vivo,
 // próxima meta, mejor racha, "Perdí la racha" e historial), formulario y tarjeta de versículos.
 import { ReactNode, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { DateField } from '@/components/date-field';
 import { Btn, Field } from '@/components/form';
 import { IconBack, IconLock, IconPencil, IconTrash } from '@/components/icons';

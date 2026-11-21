@@ -5,13 +5,13 @@ import { useEffect, useMemo, useRef } from 'react';
 
 import { buildGraph, CLUSTER_COUNT, computeFrame, DEPTHS, NODE_STYLE, type Frame, type Pt } from '@/components/brain-graph';
 import { useMotion } from '@/lib/motion';
-import { C, NEURAL } from '@/theme';
+import { C, mono, NEURAL } from '@/theme';
 
 export type NeuralCoreProps = { size: number; thinking?: boolean; labels?: boolean; active?: boolean };
 
 const STEP = 1 / 30 - 0.002; // segundos entre cuadros (con margen para no saltarse uno de cada dos)
 
-const MONO = 'Menlo, "SF Mono", ui-monospace, monospace';
+const MONO = `${mono}, Menlo, "SF Mono", ui-monospace, monospace`;
 
 function dots(ctx: CanvasRenderingContext2D, pts: Pt[], r: number) {
   ctx.beginPath();

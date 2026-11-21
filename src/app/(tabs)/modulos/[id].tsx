@@ -2,8 +2,9 @@
 // los mantenimientos (del más reciente al más antiguo) y los papeles con su foto o PDF.
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { Btn, Field } from '@/components/form';
 import { IconPlus } from '@/components/icons';
 import { ModuleIcon } from '@/components/modules';
@@ -41,6 +42,7 @@ export default function VehicleScreen() {
     if (mod?.kind === 'universidad') router.replace('/modulos/universidad');
     if (mod?.kind === 'horarios') router.replace('/modulos/horarios');
     if (mod?.kind === 'goals') router.replace('/modulos/goals');
+    if (mod?.kind === 'finanzas') router.replace('/modulos/finanzas');
   }, [mod?.kind]);
 
   if (!mod) {

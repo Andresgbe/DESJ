@@ -1,10 +1,11 @@
-// YO · Finanzas: ingresos, gastos, deudas y presupuesto mensual. Todo se lleva a una sola unidad, el dólar BCV,
+// Módulo Finanzas (antes en YO): ingresos, gastos, deudas y presupuesto mensual. Todo se lleva a una sola unidad, el dólar BCV,
 // para poder sumar bolívares, dólar efectivo, USDT y euros. Tres secciones independientes que se eligen en una
 // lista plegable: Ingresos y gastos (la principal), Deudas y Presupuesto.
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { Breakdown, CategoryManager, confirmRemoveTx, MissingRatesBanner, MonthChart, RatesCard, Totals, TransactionModal, TxList } from '@/components/finance';
 import { BillsTab, BudgetTab, MonthStepper } from '@/components/finance-lists';
 import { Btn } from '@/components/form';
@@ -23,7 +24,7 @@ const TABS: { id: Tab; label: string }[] = [
 export default function Finanzas() {
   const [tab, setTab] = useState<Tab>('flujo');
   return (
-    <Screen module="Módulo 03.2 · Finanzas" back>
+    <Screen module="Módulo · Finanzas" back>
       <Title accent="finanzas">Tus</Title>
       <SectionPicker value={tab} onChange={setTab} />
       {tab === 'flujo' ? <FlowTab /> : tab === 'deudas' ? <BillsTab /> : <BudgetTab />}

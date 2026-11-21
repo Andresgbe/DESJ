@@ -3,8 +3,9 @@
 // vez se crea el PIN. Si se olvida, con sesión se recupera con la contraseña de la cuenta.
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { Btn, Field } from '@/components/form';
 import { IconPlus } from '@/components/icons';
 import { ModuleIcon } from '@/components/modules';

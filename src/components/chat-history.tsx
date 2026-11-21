@@ -1,8 +1,9 @@
 // Historial de conversaciones: hoja que sube desde abajo, agrupada por fecha. Cada una se abre, se renombra o se borra.
 import { useState } from 'react';
-import { Modal, Pressable, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, SectionList, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Text, TextInput } from '@/components/text';
 import { Label } from '@/components/ui';
 import { Conversation, useChats } from '@/lib/chats';
 import { confirm, notify } from '@/lib/confirm';

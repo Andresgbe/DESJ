@@ -3,8 +3,9 @@
 // actualiza Conocimiento y DESJ los lee en el siguiente mensaje. Lo demás de esos archivos no se toca.
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { DateField } from '@/components/date-field';
 import { Btn, Field } from '@/components/form';
 import { Card, Label, Row, Screen, Title } from '@/components/ui';

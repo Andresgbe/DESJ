@@ -3,8 +3,9 @@
 // y se abre con un toque. Las categorías se agregan, renombran, cambian de color y borran en "Categorías".
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { Text, TextInput } from '@/components/text';
 import { Btn } from '@/components/form';
 import { IconCheck, IconPlus, IconTrash } from '@/components/icons';
 import { ModuleIcon } from '@/components/modules';

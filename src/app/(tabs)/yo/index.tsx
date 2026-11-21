@@ -1,16 +1,16 @@
 // Módulo 03 · YO: tu información personal alrededor de una armadura holográfica que gira, y la
-// entrada a tus módulos personales (Salud, Finanzas, Mis datos). Los datos salen de tus archivos
+// entrada a tus módulos personales (Salud, Mis datos; Finanzas pasó a Módulos). Los datos salen de tus archivos
 // de conocimiento (perfil.md, salud.md) y de tus pastillas; lo que falta se muestra "[pendiente]".
 import { router, useFocusEffect, type Href } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 
 import { IconChevron } from "@/components/icons";
+import { Text } from "@/components/text";
 import { SUIT_RATIO, SuitCore } from "@/components/suit-core";
 import { Label, Screen, Title } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
@@ -137,12 +137,6 @@ export default function Yo() {
       />
       <ModuleRow
         tag="03.2"
-        title="Finanzas"
-        sub="Ingresos, gastos, deudas y presupuesto"
-        href="/yo/finanzas"
-      />
-      <ModuleRow
-        tag="03.3"
         title="Mis datos"
         sub="Nombre, altura, peso, sangre y datos médicos"
         href="/yo/mis-datos"

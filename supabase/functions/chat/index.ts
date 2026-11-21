@@ -8,7 +8,7 @@
 //   GEMINI_API_KEY     obligatorio (https://aistudio.google.com/apikey)
 //   GEMINI_MODEL       opcional (por defecto gemini-3.8-flash)
 //   GEMINI_THINKING    opcional: MINIMAL, LOW (por defecto), MEDIUM o HIGH
-//   AI_MONTHLY_LIMIT_USD  opcional: tope mensual por persona si no tiene fila en ai_limits (por defecto 10)
+//   AI_MONTHLY_LIMIT_USD  opcional: tope mensual por persona si no tiene fila en ai_limits (por defecto 5)
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
@@ -22,7 +22,7 @@ const MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-3.8-flash';
 const THINKING = Deno.env.get('GEMINI_THINKING') ?? 'LOW';
 /** Tiempo máximo para responder un mensaje completo (con reintentos, respaldo y herramientas). */
 const BUDGET_MS = 55_000;
-const DEFAULT_LIMIT_USD = Number(Deno.env.get('AI_MONTHLY_LIMIT_USD') ?? '10');
+const DEFAULT_LIMIT_USD = Number(Deno.env.get('AI_MONTHLY_LIMIT_USD') ?? '5');
 // Lo que la persona puede elegir en la app (modelo y esfuerzo); cualquier otro valor se ignora.
 const MODELS = ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.1-pro-preview'];
 const EFFORTS = ['LOW', 'MEDIUM', 'HIGH'];
@@ -191,6 +191,7 @@ Deno.serve(async (req) => {
     await saveUsage(db, model, used, cost); // lo que se gastó en los pasos que sí respondieron
     if (e instanceof GeminiError) {
       if (e.status === 408) return json({ error: 'DESJ tardó demasiado en responder. Intenta de nuevo o elige un modelo más rápido.' }, 504);
+      if (e.status === 429 && /quota/i.test(e.message)) return json({ error: 'DESJ llegó al límite de uso de Google por ahora. Intenta más tarde.' }, 429);
       if (e.status === 429) return json({ error: 'DESJ está ocupado, intenta en un momento.' }, 429);
       if (e.status === 403 || /API_KEY|API key/i.test(e.message)) return json({ error: 'La API key de Gemini no es válida.' }, 502);
       return json({ error: `Error de Gemini (${e.status}).` }, 502);

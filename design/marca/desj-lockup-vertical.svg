@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 1080" width="100%" height="100%">
+  <defs>
+    <linearGradient id="dl9_wordGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="55%" stop-color="#E0F7FF"/>
+      <stop offset="100%" stop-color="#8FD3FF"/>
+    </linearGradient>
+    <linearGradient id="dl9_bevelMain" x1="15%" y1="0%" x2="88%" y2="100%">
+      <stop offset="0%" stop-color="#76E5FC"/>
+      <stop offset="45%" stop-color="#3993F5"/>
+      <stop offset="82%" stop-color="#163E8A"/>
+      <stop offset="100%" stop-color="#040811"/>
+    </linearGradient>
+    <linearGradient id="dl9_ribGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.9"/>
+      <stop offset="55%" stop-color="#3993F5"/>
+      <stop offset="100%" stop-color="#163E8A"/>
+    </linearGradient>
+    <linearGradient id="dl9_cavityGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#48E5D8" stop-opacity="0.72"/>
+      <stop offset="32%" stop-color="#163E8A" stop-opacity="0.88"/>
+      <stop offset="78%" stop-color="#0D275C" stop-opacity="0.96"/>
+      <stop offset="100%" stop-color="#040811" stop-opacity="0.98"/>
+    </linearGradient>
+    <radialGradient id="dl9_centerCore" cx="50%" cy="62%" r="65%">
+      <stop offset="0%" stop-color="#163E8A" stop-opacity="0.92"/>
+      <stop offset="100%" stop-color="#0D275C" stop-opacity="0.96"/>
+    </radialGradient>
+    <radialGradient id="dl9_ambient" cx="50%" cy="50%" r="48%">
+      <stop offset="0%" stop-color="#48E5D8" stop-opacity="0.28"/>
+      <stop offset="55%" stop-color="#3993F5" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#040811" stop-opacity="0"/>
+    </radialGradient>
+    <g id="dl9_sector" stroke-linejoin="round" stroke-linecap="round">
+      <g>
+        <polygon points="-199,126 -95,66 14,66 49,126" fill="url(#dl9_cavityGrad)"/>
+        <polygon points="-292,180 92,180 49,126 -199,126" fill="url(#dl9_bevelMain)"/>
+        <polygon points="14,66 26,66 92,180 49,126" fill="url(#dl9_ribGrad)"/>
+        <polyline points="-199,126 -95,66 26,66 92,180" fill="none" stroke="#76E5FC" stroke-width="2.6"/>
+        <line x1="-199" y1="126" x2="49" y2="126" stroke="#FFFFFF" stroke-opacity="0.75" stroke-width="2.4"/>
+        <polygon points="-292,180 92,180 26,66 -95,66" fill="none" stroke="#3993F5" stroke-width="2"/>
+        <circle cx="-199" cy="126" r="5" fill="#FFFFFF"/>
+      </g>
+      <g>
+        <polygon points="59,66 95,66 199,126 94,126" fill="url(#dl9_cavityGrad)"/>
+        <polygon points="113,180 292,180 199,126 94,126" fill="url(#dl9_bevelMain)"/>
+        <polygon points="47,66 59,66 94,126 113,180" fill="url(#dl9_ribGrad)"/>
+        <polyline points="113,180 47,66 95,66 199,126" fill="none" stroke="#76E5FC" stroke-width="2.6"/>
+        <line x1="94" y1="126" x2="199" y2="126" stroke="#FFFFFF" stroke-opacity="0.75" stroke-width="2.4"/>
+        <polygon points="113,180 292,180 95,66 47,66" fill="none" stroke="#3993F5" stroke-width="2"/>
+        <circle cx="199" cy="126" r="5" fill="#FFFFFF"/>
+      </g>
+    </g>
+  </defs>
+  <g transform="translate(108, 24) scale(0.61)">
+    <g transform="translate(512, 535)">
+      <circle cx="0" cy="0" r="360" fill="url(#dl9_ambient)"/>
+      <g class="hud-orbit-anim">
+        <circle r="418" fill="none" stroke="#163E8A" stroke-width="2.5" stroke-opacity="0.65"/>
+        <circle r="390" fill="none" stroke="#3993F5" stroke-width="3.4" stroke-opacity="0.92" stroke-dasharray="94 28 118 28 76 28"/>
+        <circle r="342" fill="none" stroke="#3993F5" stroke-width="11" stroke-opacity="0.65" stroke-dasharray="2.5 13.5"/>
+      </g>
+      <g>
+        <circle cx="0" cy="-310" r="9" fill="#64F4AC"/>
+        <circle cx="0" cy="310" r="9" fill="#3AD9D6"/>
+        <circle cx="-310" cy="0" r="9" fill="#3AD9D6"/>
+        <circle cx="310" cy="0" r="9" fill="#3AD9D6"/>
+      </g>
+      <g>
+        <use href="#dl9_sector" transform="rotate(0)"/>
+        <use href="#dl9_sector" transform="rotate(120)"/>
+        <use href="#dl9_sector" transform="rotate(240)"/>
+      </g>
+      <g>
+        <polygon points="0,-112 97,56 -97,56" fill="url(#dl9_centerCore)" stroke="#3993F5" stroke-width="3.2" stroke-dasharray="7 6" stroke-linejoin="round"/>
+        <circle cx="0" cy="0" r="10" fill="#64F4AC"/>
+      </g>
+    </g>
+  </g>
+  <g transform="translate(194, 672) scale(1.22)">
+    <g>
+      <path fill="url(#dl9_wordGrad)" fill-rule="evenodd"
+            d="M 0,5 L 35,5 C 55,5 64,17 64,39 L 64,171 C 64,193 55,205 35,205 L 0,205 Z M 23,27 L 32,27 C 39,27 41,32 41,42 L 41,168 C 41,178 39,183 32,183 L 23,183 Z"/>
+      <rect x="74" y="183" width="22" height="22" fill="#45B6FE"/>
+      <path fill="url(#dl9_wordGrad)"
+            d="M 106,5 L 162,5 L 162,27 L 129,27 L 129,91 L 158,91 L 158,113 L 129,113 L 129,183 L 162,183 L 162,205 L 106,205 Z"/>
+      <rect x="172" y="183" width="22" height="22" fill="#45B6FE"/>
+      <path fill="none" stroke="url(#dl9_wordGrad)" stroke-width="23" stroke-linecap="butt" stroke-linejoin="round"
+            d="M 256.5,68 L 256.5,35 C 256.5,8 215.5,8 215.5,35 L 215.5,68 C 215.5,95 256.5,103 256.5,134 L 256.5,175 C 256.5,202 215.5,202 215.5,175 L 215.5,136"/>
+      <rect x="278" y="183" width="22" height="22" fill="#45B6FE"/>
+      <path fill="none" stroke="url(#dl9_wordGrad)" stroke-width="23" stroke-linecap="butt" stroke-linejoin="round"
+            d="M 360.5,5 L 360.5,175 C 360.5,202 321.5,202 321.5,175 L 321.5,142"/>
+    </g>
+  </g>
+  <line x1="210" y1="958" x2="630" y2="958" stroke="#3993F5" stroke-width="2" stroke-opacity="0.45"/>
+  <rect x="415" y="953" width="10" height="10" fill="#45B6FE"/>
+  <text x="420" y="1004" text-anchor="middle" fill="#45B6FE" font-family="'Sora', sans-serif" font-weight="600" font-size="24" letter-spacing="10">HOLOGRAPHIC A.I.</text>
+</svg>

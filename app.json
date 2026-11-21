@@ -10,7 +10,11 @@
     "ios": {
       "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.agsoftware.desj",
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "DESJ convierte tu voz en texto en el teléfono para escribir tus mensajes.",
+        "NSMicrophoneUsageDescription": "DESJ usa el micrófono para que le dictes mensajes."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -20,7 +24,15 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.agsoftware.desj"
+      "package": "com.agsoftware.desj",
+      "permissions": [
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -70,6 +82,12 @@
         "projectId": "f3ea1cc1-c8c4-4833-a6e9-f11997f46430"
       }
     },
-    "owner": "andruu.gil"
+    "owner": "andruu.gil",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/f3ea1cc1-c8c4-4833-a6e9-f11997f46430"
+    }
   }
 }

@@ -75,12 +75,15 @@ export type GenerateRequest = {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** Máximo que se espera cada intento; además nunca se pasa del `deadline` del mensaje completo. */
 const TIMEOUT_MS = 25_000;
+/** Mientras la cuenta no tenga cuota de búsqueda (nivel gratuito), no se pide: ahorra una vuelta por mensaje. */
+const SEARCH_PAUSE_MS = 60 * 60 * 1000;
+let searchOffUntil = 0;
 
 export async function generate(apiKey: string, model: string, req: GenerateRequest): Promise<GenerateResult> {
   const timeLeft = () => Math.max(1, Math.min(TIMEOUT_MS, (req.deadline ?? Infinity) - Date.now()));
   if (req.deadline && req.deadline - Date.now() < 3000) throw new GeminiError(408, 'Sin tiempo para otro intento');
-  let withSearch = Boolean(req.search);
-  const send = async (withThinking: boolean) => {
+  let withSearch = Boolean(req.search) && Date.now() >= searchOffUntil;
+  const post = async (withThinking: boolean) => {
     const tools = [...(withSearch ? [{ googleSearch: {} }] : []), ...(req.tools?.length ? toGeminiTools(req.tools) : [])];
     const body = {
       systemInstruction: { parts: [{ text: req.system }] },
@@ -100,17 +103,29 @@ export async function generate(apiKey: string, model: string, req: GenerateReque
       body: JSON.stringify(body),
     });
   };
+  // Cualquier intento que se pase de tiempo es un 408: así se prueba el modelo de respaldo o se avisa claro.
+  const send = async (withThinking: boolean) => {
+    try {
+      return await post(withThinking);
+    } catch (e) {
+      if (e instanceof DOMException && (e.name === 'TimeoutError' || e.name === 'AbortError')) throw new GeminiError(408, 'Gemini no respondió a tiempo');
+      throw e;
+    }
+  };
 
   let withThinking = true;
-  let res: Response;
-  try {
+  let res = await send(withThinking);
+  // Cuota agotada con búsqueda (el nivel gratuito casi no la incluye): se repite sin búsqueda para que DESJ igual responda.
+  if (res.status === 429 && withSearch && /quota/i.test(await res.clone().text())) {
+    console.error('Gemini: cuota agotada con búsqueda; repito sin búsqueda y la pauso 1 h');
+    withSearch = false;
+    searchOffUntil = Date.now() + SEARCH_PAUSE_MS;
     res = await send(withThinking);
-  } catch (e) {
-    if (e instanceof DOMException && (e.name === 'TimeoutError' || e.name === 'AbortError')) throw new GeminiError(408, 'Gemini no respondió a tiempo');
-    throw e;
   }
+  // Cuota agotada (no pasajera): reintentar no sirve.
+  const quota = res.status === 429 && /quota/i.test(await res.clone().text());
   // Un error pasajero (límite o saturación) se reintenta hasta 2 veces, esperando un poco más cada vez.
-  for (let retry = 1; retry <= 2 && (res.status === 429 || res.status === 503) && timeLeft() > 5000; retry++) {
+  for (let retry = 1; !quota && retry <= 2 && (res.status === 429 || res.status === 503) && timeLeft() > 5000; retry++) {
     await sleep(1500 * retry);
     res = await send(withThinking);
   }

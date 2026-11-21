@@ -3,10 +3,11 @@
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { useState } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { SharedValue, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
+import { Text, TextInput } from '@/components/text';
 import { DateField } from '@/components/date-field';
 import { Btn, Field } from '@/components/form';
 import { IconClose, IconPlus, IconTrash } from '@/components/icons';

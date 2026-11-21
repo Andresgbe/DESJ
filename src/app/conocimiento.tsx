@@ -3,10 +3,11 @@
 // Archivos: ver, editar, renombrar y borrar los de base (perfil, salud, negocios, preferencias) y crear los tuyos.
 import * as Haptics from 'expo-haptics';
 import { useEffect, useRef, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 
+import { Text, TextInput } from '@/components/text';
 import { Btn, Field } from '@/components/form';
 import { IconPlus } from '@/components/icons';
 import { Card, Label, Mono, Row } from '@/components/ui';

@@ -2,8 +2,9 @@
 // cada una. Cada materia abre su detalle (plan de evaluación, notas, 15 semanas de clases y sus links).
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { Btn } from '@/components/form';
 import { IconPlus } from '@/components/icons';
 import { ModuleIcon } from '@/components/modules';

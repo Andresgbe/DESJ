@@ -1,17 +1,18 @@
 // Piezas visuales reutilizables: pantalla, tarjeta, etiquetas y el anillo HUD.
 import { router } from 'expo-router';
 import { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextProps, View, ViewStyle } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextProps, View, ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg';
 
+import { Text } from '@/components/text';
 import { IconBack } from '@/components/icons';
 import { NeuralBackground } from '@/components/neural-bg';
 import { ProfileButton } from '@/components/profile-menu';
 import { hhmmOf, useClock } from '@/lib/clock';
 import { useLayout } from '@/lib/layout';
 import { useMotion } from '@/lib/motion';
-import { C, mono, S } from '@/theme';
+import { C, FONTS, mono, S } from '@/theme';
 
 /**
  * `menu`: botón en el lado izquierdo del header (p. ej. el menú hamburguesa del Núcleo).
@@ -142,7 +143,7 @@ export function HudRing({ size = 210, big, small, progress }: { size?: number; b
           transform="rotate(-90 110 110)"
         />
       )}
-      <SvgText x={110} y={116} textAnchor="middle" fill={C.text} fontFamily={mono} fontSize={30} fontWeight="600">
+      <SvgText x={110} y={116} textAnchor="middle" fill={C.text} fontFamily={FONTS.mono[600]} fontSize={30}>
         {big}
       </SvgText>
       <SvgText x={110} y={138} textAnchor="middle" fill={C.muted} fontFamily={mono} fontSize={9} letterSpacing={2}>

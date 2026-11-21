@@ -212,6 +212,31 @@ export const IconLock = ({ color, size = 18 }: P) => (
   </Svg>
 );
 
+// Finanzas: billetera.
+export const IconWallet = ({ color, size = 22 }: P) => (
+  <Svg {...base(size, color)}>
+    <Path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3" />
+    <Rect x={4} y={7} width={17} height={12} rx={2.5} />
+    <Path d="M16 13h2" />
+  </Svg>
+);
+
+// Ver / ocultar contraseña.
+export const IconEye = ({ color, size = 20 }: P) => (
+  <Svg {...base(size, color)}>
+    <Path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
+    <Circle cx={12} cy={12} r={3} />
+  </Svg>
+);
+
+export const IconEyeOff = ({ color, size = 20 }: P) => (
+  <Svg {...base(size, color)}>
+    <Path d="M9.9 5.2A10.4 10.4 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-2.6 3.6M6.1 6.4C3.4 8.2 2 12 2 12s3.6 7 10 7a9.7 9.7 0 0 0 5-1.4" />
+    <Path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+    <Path d="M3 3l18 18" />
+  </Svg>
+);
+
 export const IconArrowUp = ({ color, size = 18 }: P) => (
   <Svg {...base(size, color)}>
     <Path d="M12 19V5M6 11l6-6 6 6" />

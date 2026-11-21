@@ -4,7 +4,7 @@
 -- ai_limits: tope mensual en USD por persona. Solo lectura desde la app; se cambia en el panel de Supabase:
 --   insert into public.ai_limits (user_id, monthly_usd) values ('<uuid>', 15)
 --   on conflict (user_id) do update set monthly_usd = excluded.monthly_usd, updated_at = now();
--- Sin fila en ai_limits, la Edge Function usa AI_MONTHLY_LIMIT_USD (por defecto 10).
+-- Sin fila en ai_limits, la Edge Function usa AI_MONTHLY_LIMIT_USD (por defecto 5).
 
 create table public.ai_usage (
   id uuid primary key default gen_random_uuid(),

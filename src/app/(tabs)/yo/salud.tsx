@@ -3,8 +3,9 @@
 import * as Haptics from 'expo-haptics';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { Btn, Choice, Field } from '@/components/form';
 import { ContactCard, ContactForm, ExamForm, ExamRow } from '@/components/health';
 import { IconCheck, IconPlus } from '@/components/icons';

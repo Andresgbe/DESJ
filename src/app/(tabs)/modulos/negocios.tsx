@@ -1,6 +1,7 @@
 // Módulos · Negocios: ganadería, legal y mercado (por ahora con datos de ejemplo). Se abre desde MÓDULOS.
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { Card, Label, Mono, Row, Screen, Title } from '@/components/ui';
 import { C, mono } from '@/theme';
 

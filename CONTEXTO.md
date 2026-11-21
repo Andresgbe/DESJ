@@ -81,7 +81,7 @@ Encuesta: propósito = *ahorrar tiempo en tareas repetitivas*; tipo = *app o pla
 | Salud · historial médico y contactos | YO · Salud: historial de consultas, laboratorios, estudios y procedimientos, agrupado por año y mes (lo más reciente arriba), cada registro con sus archivos tipificados (informe, orden, resultado, receta) que se ven y descargan; contactos (doctores, clínicas, laboratorios). DESJ los ve, lee los archivos (`leer_registro_medico`), anota resultados y guarda registros, archivos (`adjuntar_a_registro_medico`) y contactos desde el chat | 1 ✅ |
 | Salud · pastillas | Varias dosis al día (1–12), cada una con hora opcional; se marca cada dosis; avisos solo para dosis con hora | 1 ✅ |
 | Mis datos | YO · Mis datos: formulario de datos básicos y médicos que escribe en perfil.md y salud.md (se ve en Conocimiento) | 1 ✅ |
-| Finanzas | YO · Finanzas: Ingresos y gastos en Bs, dólar BCV, efectivo, USDT y euro llevados a dólar BCV (tasas de DolarAPI), con gráfica diaria, desglose por categoría, tasas y categorías editables; Deudas; Presupuesto mensual (recurrentes + puntuales). DESJ registra movimientos desde el chat (`registrar_movimiento`, `actualizar_tasas`, `fijar_tasa`) | 1 ✅ |
+| Finanzas | Módulo Finanzas (antes en YO): Ingresos y gastos en Bs, dólar BCV, efectivo, USDT y euro llevados a dólar BCV (tasas de DolarAPI), con gráfica diaria, desglose por categoría, tasas y categorías editables; Deudas; Presupuesto mensual (recurrentes + puntuales). DESJ registra movimientos desde el chat (`registrar_movimiento`, `actualizar_tasas`, `fijar_tasa`) | 1 ✅ |
 | Módulos | Pestaña MÓDULOS con catálogo cerrado: la persona agrega, quita y ordena módulos, y cada tipo tiene su propia vista. Hoy: **Negocios** (uno) y **Vehículo** (uno por carro: ficha y kilometraje, mantenimientos con el próximo por km o fecha, papeles con vencimiento y foto/PDF, y "Próximos" arriba). DESJ: `registrar_mantenimiento`, `actualizar_km`, `guardar_papel_vehiculo` | 1 ✅ |
 | Salud · Garmin | Sueño, FC reposo, pasos, entrenos vía Apple Health | 2 |
 | Ganadería | Rebaño por lotes, pesajes, vacunas, partos, alertas sanitarias | 2 |
@@ -126,7 +126,7 @@ src/
     (tabs)/yo/salud.tsx    ← YO · Salud: pestañas Pastillas (dosis múltiples, horas opcionales, recordatorios), Historial (año → mes → día) y Contactos
     (tabs)/yo/examen/[id].tsx ← detalle de un registro del historial: datos, archivos por tipo con vista previa y descarga, editar, borrar
     (tabs)/yo/mis-datos.tsx ← YO · Mis datos: formulario que escribe en perfil.md / salud.md
-    (tabs)/yo/finanzas.tsx ← YO · Finanzas: pestañas Ingresos y gastos, Deudas, Presupuesto
+    (tabs)/modulos/finanzas.tsx ← módulo Finanzas: pestañas Ingresos y gastos, Deudas, Presupuesto
     (tabs)/modulos/index.tsx ← MÓDULOS: tus módulos; catálogo para agregar; quitar y ordenar
     (tabs)/modulos/[id].tsx ← módulo Vehículo: próximos, ficha, mantenimientos y papeles
     (tabs)/modulos/negocios.tsx ← ganadería, legal, mercado (datos de EJEMPLO)
@@ -201,7 +201,7 @@ Inspirada en el carrusel de Adrián y en los grafos tipo "Jarvis": fondo casi ne
 **Decisión (18 oct 2026):** el HUD de anillos concéntricos se reemplazó por el cerebro. Se dibuja con `@shopify/react-native-skia` en el teléfono (viene en Expo Go) y con `<canvas>` en web. Cuando DESJ piensa, el cerebro acelera, salen más señales y el núcleo brilla más.
 
 **Logo: el Corazón de DESJ (18 nov 2026).** El logo de DESJ se llama **Corazón de DESJ** (así se le dice desde el 18 nov 2026). Es el **Prisma Interconectado, versión B**: tres cuchillas de vidrio biselado que forman un triángulo, repetidas cada 120°, con un triángulo punteado y un nodo en el centro. Se diseñó con Gemini: https://gemini.google.com/share/a6e977fe4c45?social_preview=true&skid=b4415182-9fcf-44bd-9474-36238675a063 (propuesta "Vista Maestra A+B+C"). Los 5 SVG originales están en `design/prisma/` (`online`, `listening`, `thinking`, `responding`, `alert`).
-- **Dónde va:** en el centro del cerebro, al 42 % del lado del cerebro (reemplazó a la esfera de alambre; el cerebro bajó de 1.500 a 1.200 nodos para que el corazón respire) y como ícono: favicon, ícono de la web instalable (PWA), ícono del iPhone y splash. Dentro del cerebro va el triángulo con un anillo propio, fino y translúcido como en la referencia de Gemini (dos círculos finos y uno punteado, del color del estado, con un velo oscuro muy leve: los nodos de atrás se siguen viendo); los nodos interiores del cerebro están un poco apartados del centro para dejarle espacio; los anillos grandes y los 4 puntos en órbita van solo en el ícono.
+- **Dónde va:** en el centro del cerebro, al 20 % del lado del cerebro (reemplazó a la esfera de alambre), y desde el 19 nov 2026 **debajo** de la red: los nodos pasan sobre su anillo, pero sobre el triángulo solo 1 de cada 10 y ninguna conexión (`brain-graph.ts`). El cerebro tiene unos 1.700 nodos en 5 grupos: Memoria, Conocimiento, Negocios, Salud y Alertas (rojo; Pendientes se quitó y Calendario pasó a Alertas). También va como ícono: favicon, ícono de la web instalable (PWA), ícono del iPhone y splash. Dentro del cerebro va el triángulo con un anillo propio, fino y translúcido como en la referencia de Gemini (dos círculos finos y uno punteado, del color del estado, con un velo oscuro muy leve: los nodos de atrás se siguen viendo); los nodos interiores del cerebro están un poco apartados del centro para dejarle espacio; los anillos grandes y los 4 puntos en órbita van solo en el ícono.
 - **Código:** la forma está en `src/components/prism-shape.ts` (texto SVG puro, sin React Native) y la usan la app (`prism.tsx`) y los íconos (`design/logo.mjs`). Los colores salen de los tokens `prism-*`; las luces y sombras de cada estado se calculan mezclando su color con blanco y con el fondo.
 - **Estados** (cambian el color del prisma y la línea de estado bajo el cerebro):
 
@@ -237,6 +237,8 @@ Inspirada en el carrusel de Adrián y en los grafos tipo "Jarvis": fondo casi ne
 
 **Módulos con catálogo (24 oct 2026):** "Agregar módulo" muestra el catálogo; cada módulo es distinto (no hay bitácora genérica: `module_entries` quedó sin uso). Por ahora el catálogo tiene Negocios (uno por persona, índice único) y Vehículo (varios; tablas `vehicles`, `vehicle_services`, `vehicle_documents`; archivos en `documentos/<usuario>/vehiculos/<módulo>/`). "Próximos" avisa papeles que vencen en 30 días o menos y servicios a 1.000 km o 30 días. Los avisos son en pantalla y por DESJ; no hay notificación push en la versión web.
 
+**Finanzas pasa a Módulos (20 nov 2026):** ya no está en YO. Es un tipo de módulo (`finanzas`, uno por persona, ícono billetera; migración `20261120000000_finanzas_modulo` amplía `modules_kind_check` y le creó el módulo a quien ya tenía movimientos). Los datos no se movieron: siguen en las tablas `finance_*` ligados a la persona, no al módulo, así que quitar el módulo solo quita la tarjeta y al volver a agregarlo aparece todo igual.
+
 **Finanzas (23 oct 2026):** réplica del módulo Finance de NEXUS adaptada a DESJ (español de "tú", tokens HUD, chips en vez de selects). Regla: `amount_usd = amount / rate_per_usd`, guardado con el movimiento (cambiar una tasa no toca lo registrado); las tasas nacen en null y nunca se inventan. Tablas `finance_categories`, `finance_rates`, `finance_transactions`, `finance_bills`, `finance_monthly_budget`; se siembran al abrir Finanzas si la cuenta no tiene categorías ni tasas. Los colores de categoría son datos de la persona (paleta en `lib/finance.ts`), no tokens de la interfaz.
 
 **Varios archivos por mensaje (22 oct 2026):** el chat acepta hasta 5 archivos (18 MB entre todos). Van en `messages.attachments` (jsonb; el primero también en las columnas viejas) y llegan a Claude numerados (Archivo 1, 2…); `guardar_registro_medico` y `adjuntar_a_registro_medico` reciben `archivos: [{ numero, tipo_documento }]`.
@@ -262,6 +264,20 @@ Inspirada en el carrusel de Adrián y en los grafos tipo "Jarvis": fondo casi ne
 | `ok` / `warn` / `bad` | `#6EE7B7` / `#F5B451` / `#FB7185` | estados |
 
 Mockups de referencia (10 pantallas + 4 propuestas de la vista de salud: A Puntaje, B Línea del día, C Voz primero, D Monitor). Recomendado: **C como principal de salud y B como segunda pestaña**.
+
+### Marca y tipografía (20 nov 2026)
+
+Sistema de marca hecho en Gemini (https://gemini.google.com/share/b4e6400791e4?social_preview=true&skid=710a8f80-65cc-4054-bc8c-bcdeb546f6c7&pli=1). Archivos en `design/marca/` y en el grupo **Marca** del Design System.
+
+- **Isotipo:** el Corazón de DESJ (Prisma B, "Isotipo Maestro C3"): las tres cuchillas, el triángulo punteado con el nodo verde al centro, los anillos HUD y los 4 puntos en órbita.
+- **Logotipo "D.E.S.J Monolith":** wordmark vectorial ultra-condensado, sin depender de fuentes (trazos propios). Letras con degradado blanco → `#E0F7FF` → `#8FD3FF`; los tres puntos son **cuadrados sólidos** `#45B6FE` (el "módulo cuadrado" es la firma de la marca: se repite en remates, viñetas y marcadores HUD). Ratio 1.88:1; proporción isotipo : wordmark = 1 : 2.1.
+- **Versiones (SVG):** `desj-lockup-horizontal.svg` (isotipo + línea HUD con nodo cuadrado + D.E.S.J + "PERSONAL A.I. ECOSYSTEM"; cabeceras web, presentaciones, firmas), `desj-lockup-vertical.svg` (isotipo arriba, D.E.S.J y "HOLOGRAPHIC A.I."; splash y portada), `desj-wordmark-monolith.svg` (solo el wordmark) y `desj-badge-squircle.svg` (sello squircle con isotipo + D.E.S.J; ícono de app, login, avatar).
+- **Tipografía "DESJ Aether"** (`design/marca/desj-typography.css`), por contraste: el logo es muy vertical y condensado; los textos son anchos y legibles.
+  - Logo / display: Six Caps o Big Shoulders Display (solo para la marca; el wordmark oficial es el SVG).
+  - Títulos: **Sora** 600–800, `letter-spacing -0.02em`, `line-height 1.18`.
+  - Textos, párrafos y chat: **Plus Jakarta Sans** 400–700, `line-height 1.6`.
+  - HUD, relojes, métricas y etiquetas: **JetBrains Mono** 400–600; kicker en mayúsculas, 11 px, `letter-spacing 0.2em`.
+- **En la app (20 nov 2026):** la tipografía DESJ Aether ya está aplicada. Las tres familias se cargan con `@expo-google-fonts/*` (`useFonts` en `app/_layout.tsx`; si fallan, sigue la fuente del sistema). Cada peso es una familia (`Sora_700Bold`…, ver `FONTS` en `theme.ts`) y el componente `Text`/`TextInput` de `components/text.tsx` la elige según el estilo: `fontFamily: mono` → JetBrains Mono, 20 px o más con peso 600+ → Sora, el resto → Plus Jakarta Sans. **Usa siempre `Text` y `TextInput` de `@/components/text`, no los de `react-native`.** El cerebro en el teléfono (Skia) usa `monoSystem`. El wordmark D.E.S.J (`components/wordmark.tsx`, tokens `brand-*`) va en la entrada bajo el cerebro, y el formulario de entrada usa la columna de `column-max`. El sello squircle como ícono de la app queda pendiente.
 
 ## 10. Reglas del producto (no negociables)
 
@@ -341,6 +357,7 @@ npm run deploy:web         # exporta a dist/ y publica en producción (EAS Hosti
 - Documento de concepto: https://claude.ai/code/artifact/cfc073d2-84f4-4bbc-a24f-b3d96cb515ba
 - Mockups (app, web y propuestas de salud): https://claude.ai/artifact/USELQwhxi7JreX7RcAGWJX
 - Logo Prisma B y paleta Pantone (propuesta en Gemini): https://gemini.google.com/share/a6e977fe4c45?social_preview=true&skid=b4415182-9fcf-44bd-9474-36238675a063
+- Sistema de marca y tipografía (D.E.S.J Monolith + DESJ Aether, en Gemini): https://gemini.google.com/share/b4e6400791e4?social_preview=true&skid=710a8f80-65cc-4054-bc8c-bcdeb546f6c7&pli=1
 - Referencia: @adrian.alvarezl en Instagram (carrusel "JARVIS").
 
 **Calendario Semana/Día y archivos en mosaico (25 oct 2026):** la pestaña Calendario tiene vistas Mes, Semana y Día; en Semana y Día los eventos se ubican por hora (los que se pisan van en columnas), los de todo el día arriba, y una línea marca la hora actual. Tocar un espacio vacío abre Agregar con esa hora; tocar el día en la cabecera abre la vista Día. En Salud, los archivos de un registro se ven como mosaicos pequeños (2 por fila en el teléfono, 3 o 4 en pantallas anchas); la foto en grande solo se abre con "Ampliar" (visor dentro de la app; los PDF se abren en el visor del teléfono o del navegador).

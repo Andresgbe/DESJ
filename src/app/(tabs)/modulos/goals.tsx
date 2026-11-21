@@ -3,8 +3,9 @@
 // la abre: pasos para marcar, "Llevo…" si tiene número, progreso a mano si no, Logrado, Editar y Borrar.
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { Text, TextInput } from '@/components/text';
 import { DateField } from '@/components/date-field';
 import { Btn, Field } from '@/components/form';
 import { IconCheck, IconPlus, IconTrash } from '@/components/icons';

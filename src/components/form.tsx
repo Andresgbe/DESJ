@@ -1,8 +1,9 @@
 // Controles de formulario de los módulos (Salud, Mis datos): campo con etiqueta, selector de opciones
 // y botones. Mismo estilo que el resto: campos en surface-sunken dentro de una Card, acción principal en accent.
 import { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, TextInputProps, View, ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, TextInputProps, View, ViewStyle } from 'react-native';
 
+import { Text, TextInput } from '@/components/text';
 import { Label } from '@/components/ui';
 import { C, R } from '@/theme';
 

@@ -1,8 +1,9 @@
 // Piezas del módulo Vehículo: ficha, formulario de mantenimiento, formulario de papel y sus tarjetas.
 import * as WebBrowser from 'expo-web-browser';
 import { ReactNode, useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { DateField } from '@/components/date-field';
 import { Btn, Choice, Field } from '@/components/form';
 import { IconBtn } from '@/components/finance';

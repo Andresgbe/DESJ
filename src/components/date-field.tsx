@@ -1,8 +1,9 @@
 // Campo de fecha: se escribe DD/MM/AAAA o se elige tocando el día en un mini calendario que se abre debajo.
 // El valor sigue siendo el texto "DD/MM/AAAA" (los formularios ya lo validan con parseDate).
 import { ReactNode, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { Text, TextInput } from '@/components/text';
 import { IconBack, IconCalendar, IconChevron } from '@/components/icons';
 import { Label } from '@/components/ui';
 import { C, mono, R } from '@/theme';

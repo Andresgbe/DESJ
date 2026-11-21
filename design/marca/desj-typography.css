@@ -1,0 +1,49 @@
+/* ==========================================================================
+   D.E.S.J — SISTEMA TIPOGRÁFICO OFICIAL
+   Logo Principal: D.E.S.J Monolith (SVG Vectorial / Six Caps / Big Shoulders)
+   Fuente Complementaria: DESJ Aether (Sora + Plus Jakarta Sans + JetBrains Mono)
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Six+Caps&family=Sora:wght@600;700;800&display=swap');
+
+:root {
+  /* 1. Tipografía Principal (Logotipo & Monolito Display) */
+  --desj-font-logo: 'Six Caps', 'Big Shoulders Display', sans-serif;
+
+  /* 2. Fuente Complementaria para Títulos y Encabezados (DESJ Aether Display) */
+  --desj-font-title: 'Sora', sans-serif;
+
+  /* 3. Fuente Complementaria para Textos, Párrafos y Chat IA (DESJ Aether Sans) */
+  --desj-font-body: 'Plus Jakarta Sans', sans-serif;
+
+  /* 4. Telemetría HUD, Relojes y Métricas Biométricas (DESJ Aether Mono) */
+  --desj-font-hud: 'JetBrains Mono', monospace;
+}
+
+.desj-wordmark {
+  font-family: var(--desj-font-logo);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 0.92;
+}
+
+.desj-heading {
+  font-family: var(--desj-font-title);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.18;
+}
+
+.desj-body {
+  font-family: var(--desj-font-body);
+  font-weight: 400;
+  letter-spacing: 0.005em;
+  line-height: 1.6;
+}
+
+.desj-hud-kicker {
+  font-family: var(--desj-font-hud);
+  font-size: 0.6875rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}

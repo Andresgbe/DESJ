@@ -62,6 +62,14 @@ export const NEURAL = [
   color('neural-alertas'),
 ];
 
+/** Colores del wordmark D.E.S.J (marca): degradado de las letras y los puntos cuadrados. Solo para el logotipo. */
+export const BRAND = {
+  wordTop: color('brand-word-top'),
+  word: color('brand-word'),
+  wordDeep: color('brand-word-deep'),
+  dot: color('brand-dot'),
+};
+
 /** Color del prisma (logo y centro del cerebro) en cada estado de DESJ. Solo para el prisma y los íconos. */
 export const PRISM = {
   online: color('prism-online'),
@@ -71,8 +79,28 @@ export const PRISM = {
   alert: color('prism-alert'),
 };
 
-// Las familias del Design System son pilas CSS; en el teléfono se usa la fuente del sistema y Menlo.
-export const mono = Platform.select({ ios: 'Menlo', default: 'monospace' });
+/**
+ * Tipografía DESJ Aether (Design System): Sora para títulos, Plus Jakarta Sans para leer y JetBrains Mono para el HUD.
+ * Los paquetes @expo-google-fonts cargan una familia por peso; el componente `Text` (components/text.tsx) elige la
+ * que toca según el estilo, así en las pantallas se sigue escribiendo `fontWeight` y `fontFamily: mono`.
+ */
+export const FONTS = {
+  title: { 600: 'Sora_600SemiBold', 700: 'Sora_700Bold', 800: 'Sora_800ExtraBold' },
+  body: {
+    400: 'PlusJakartaSans_400Regular',
+    500: 'PlusJakartaSans_500Medium',
+    600: 'PlusJakartaSans_600SemiBold',
+    700: 'PlusJakartaSans_700Bold',
+    800: 'PlusJakartaSans_800ExtraBold',
+  },
+  mono: { 400: 'JetBrainsMono_400Regular', 500: 'JetBrainsMono_500Medium', 600: 'JetBrainsMono_600SemiBold', 700: 'JetBrainsMono_700Bold' },
+} as const;
+export type FontRole = keyof typeof FONTS;
+
+/** HUD: etiquetas, horas y cifras (JetBrains Mono). */
+export const mono = FONTS.mono[400];
+/** Monoespaciada del sistema, para lienzos que no ven las fuentes cargadas (Skia en el teléfono). */
+export const monoSystem = Platform.select({ ios: 'Menlo', default: 'monospace' });
 
 export const S = {
   pad: space('space-screen'),

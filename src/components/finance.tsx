@@ -1,9 +1,10 @@
 // Piezas de YO · Finanzas (Ingresos y gastos): gráfica del mes, aviso de tasas faltantes, tarjeta de tasas,
 // gestor de categorías, totales, desglose por categoría, lista de movimientos y el formulario de movimiento.
 import { ReactNode, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Svg, { Line, Rect } from 'react-native-svg';
 
+import { Text, TextInput } from '@/components/text';
 import { DateField } from '@/components/date-field';
 import { Btn, Choice, Field } from '@/components/form';
 import { IconCheck, IconClose, IconPencil, IconTrash } from '@/components/icons';

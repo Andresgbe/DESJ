@@ -60,7 +60,7 @@ export function useAiSettings() {
 }
 
 /** Tope mensual cuando la persona no tiene fila en `ai_limits` (el mismo que usa la Edge Function). */
-const DEFAULT_LIMIT_USD = 10;
+const DEFAULT_LIMIT_USD = 5;
 
 /** Gasto estimado de IA del mes en curso (UTC) y el límite de la persona. `null` sin nube o sin sesión. */
 export async function loadMonthSpend(): Promise<{ used: number; limit: number } | null> {

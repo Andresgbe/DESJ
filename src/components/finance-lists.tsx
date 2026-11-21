@@ -3,8 +3,9 @@
 // los movimientos de Ingresos y gastos; los montos van tal cual, sin conversión de moneda.
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { DateField } from '@/components/date-field';
 import { Btn, Field } from '@/components/form';
 import { IconBtn } from '@/components/finance';

@@ -1,9 +1,10 @@
 // Menú hamburguesa del Núcleo: la conversación actual, el historial, empezar una nueva y la
 // respuesta en voz. Se despliega bajo el botón, igual que el menú de perfil.
 import { useRef, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { Easing, FadeIn, FadeOut } from 'react-native-reanimated';
 
+import { Text } from '@/components/text';
 import { IconMenu } from '@/components/icons';
 import { AI_EFFORTS, AI_MODELS, loadMonthSpend, setAiSettings, useAiSettings } from '@/lib/ai-settings';
 import { Label } from '@/components/ui';

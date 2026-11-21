@@ -2,8 +2,9 @@
 // con notas, las 15 semanas de clases (plegadas) y los links de la materia. Editar o borrar la materia al final.
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { Btn } from '@/components/form';
 import { Label, Row, Screen, Title } from '@/components/ui';
 import { EvaluationPlan, LinkGrid, SubjectForm, Weeks } from '@/components/university';

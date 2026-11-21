@@ -3,8 +3,9 @@
 // comparar de un vistazo. Abajo cada persona con su horario semanal: agregar bloques, editar, WhatsApp, borrar.
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { Text, TextInput } from '@/components/text';
 import { Btn, Field } from '@/components/form';
 import { IconChevron, IconPlus, IconTrash } from '@/components/icons';
 import { ModuleIcon } from '@/components/modules';

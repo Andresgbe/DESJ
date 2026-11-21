@@ -1,8 +1,9 @@
 // Pantalla · vuelta de Google: termina de conectar la cuenta (Drive, Gmail, Calendar) y lleva de vuelta a Ajustes.
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
 
+import { Text } from '@/components/text';
 import { Btn } from '@/components/form';
 import { Card, Label } from '@/components/ui';
 import { finishGoogle } from '@/lib/google';

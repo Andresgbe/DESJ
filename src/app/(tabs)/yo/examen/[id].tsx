@@ -2,8 +2,9 @@
 // (informes, órdenes, recetas…) con vista previa y descarga, agregar archivos, editar y borrar.
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { Btn } from '@/components/form';
 import { ExamForm, FileCard, FilePicker } from '@/components/health';
 import { Card, Label, Row, Screen, Title } from '@/components/ui';

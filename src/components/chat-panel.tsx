@@ -5,9 +5,10 @@ import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
 import { Image } from 'expo-image';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, FlatList, NativeSyntheticEvent, Platform, Pressable, StyleSheet, Text, TextInput, TextInputKeyPressEventData, TextStyle, View } from 'react-native';
+import { Alert, FlatList, NativeSyntheticEvent, Platform, Pressable, StyleSheet, TextInput as RNTextInput, TextInputKeyPressEventData, TextStyle, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
+import { Text, TextInput } from '@/components/text';
 import { IconClip, IconClose, IconFile, IconMic, IconRetry, IconStop } from '@/components/icons';
 import { Label } from '@/components/ui';
 import { Attachment, MAX_FILES, MAX_TOTAL, pickAttachments } from '@/lib/attachments';
@@ -35,7 +36,11 @@ export function ChatPanel({ voice, onActivity }: { voice: boolean; onActivity?: 
   const flash = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopListening = useRef<(() => void) | null>(null);
   const list = useRef<FlatList<ChatMsg>>(null);
-  const field = useRef<TextInput>(null);
+  // El chat se queda pegado abajo mientras la persona no suba a leer mensajes viejos.
+  const stick = useRef(true);
+  const lastCount = useRef(0);
+  const toEnd = (animated: boolean) => requestAnimationFrame(() => list.current?.scrollToEnd({ animated }));
+  const field = useRef<RNTextInput>(null);
   const [focused, setFocused] = useState(false);
 
   // En web el campo (un <textarea>) crece con el texto hasta INPUT_MAX y después hace scroll.
@@ -143,7 +148,24 @@ export function ChatPanel({ voice, onActivity }: { voice: boolean; onActivity?: 
         keyExtractor={(m) => m.id}
         contentContainerStyle={{ gap: 10, paddingVertical: 4 }}
         keyboardShouldPersistTaps="handled"
-        onContentSizeChange={() => list.current?.scrollToEnd({ animated: true })}
+        onScroll={(e) => {
+          const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+          stick.current = contentSize.height - contentOffset.y - layoutMeasurement.height < 80;
+        }}
+        scrollEventThrottle={100}
+        // Mensaje nuevo (tuyo o de DESJ): siempre baja. Otros cambios de tamaño: solo si ya estabas abajo.
+        onContentSizeChange={() => {
+          const grew = messages.length > lastCount.current;
+          lastCount.current = messages.length;
+          if (grew || stick.current) {
+            stick.current = true;
+            toEnd(true);
+          }
+        }}
+        // Si el área del chat cambia de alto (aparece la barra de reintento, el teclado, adjuntos), se mantiene el último mensaje a la vista.
+        onLayout={() => {
+          if (stick.current) toEnd(false);
+        }}
         renderItem={({ item }) => (
           <View style={item.from === 'me' ? styles.meWrap : undefined}>
             <View style={item.from === 'me' ? styles.me : styles.bot}>

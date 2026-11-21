@@ -1,10 +1,11 @@
 // Círculo de perfil del header: al tocarlo se despliega el menú (Conocimiento, Ajustes, Cerrar sesión).
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { Easing, FadeIn, FadeOut } from 'react-native-reanimated';
 import Svg, { Circle, Path } from 'react-native-svg';
 
+import { Text } from '@/components/text';
 import { useAuth } from '@/lib/auth';
 import { useLayout } from '@/lib/layout';
 import { C, mono } from '@/theme';

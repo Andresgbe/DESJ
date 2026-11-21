@@ -5,9 +5,10 @@ import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Keyboard, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Platform, Pressable, StyleSheet } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
+import { Text } from '@/components/text';
 import { ChatHistory } from '@/components/chat-history';
 import { ChatMenu } from '@/components/chat-menu';
 import { ChatActivity, ChatPanel } from '@/components/chat-panel';
