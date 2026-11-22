@@ -25,7 +25,7 @@ export default function Modulos() {
   );
 
   const open = (m: Module) =>
-    m.kind === 'negocios' ? router.push('/modulos/negocios') : m.kind === 'nomore' ? router.push('/modulos/nomore') : m.kind === 'tobuy' ? router.push('/modulos/tobuy') : m.kind === 'universidad' ? router.push('/modulos/universidad') : m.kind === 'horarios' ? router.push('/modulos/horarios') : m.kind === 'goals' ? router.push('/modulos/goals') : m.kind === 'finanzas' ? router.push('/modulos/finanzas') : router.push({ pathname: '/modulos/[id]', params: { id: m.id } });
+    m.kind === 'negocios' ? router.push('/modulos/negocios') : m.kind === 'nomore' ? router.push('/modulos/nomore') : m.kind === 'tobuy' ? router.push('/modulos/tobuy') : m.kind === 'universidad' ? router.push('/modulos/universidad') : m.kind === 'horarios' ? router.push('/modulos/horarios') : m.kind === 'goals' ? router.push('/modulos/goals') : m.kind === 'finanzas' ? router.push('/modulos/finanzas') : m.kind === 'inversiones' ? router.push('/modulos/inversiones') : router.push({ pathname: '/modulos/[id]', params: { id: m.id } });
 
   const remove = async (m: Module) => {
     const extra =
@@ -38,11 +38,13 @@ export default function Modulos() {
               : m.kind === 'goals'
                 ? ' Se borran también todas tus metas y sus pasos.'
                 : '';
-    // Finanzas guarda los datos por persona: quitar el módulo solo quita la tarjeta.
+    // Finanzas e Inversiones guardan los datos por persona: quitar el módulo solo quita la tarjeta.
     const message =
       m.kind === 'finanzas'
         ? `¿Quitar "${m.name}" de tus módulos? Tus movimientos, deudas y presupuesto no se borran: si lo vuelves a agregar, aparecen igual.`
-        : `¿Quitar "${m.name}"?${extra} No se puede deshacer.`;
+        : m.kind === 'inversiones'
+          ? `¿Quitar "${m.name}" de tus módulos? Tus inversiones no se borran: si lo vuelves a agregar, aparecen igual.`
+          : `¿Quitar "${m.name}"?${extra} No se puede deshacer.`;
     if (await confirm('Quitar módulo', message, 'Quitar')) void removeModule(m.id);
   };
 
@@ -120,6 +122,7 @@ export default function Modulos() {
             if (kind === 'horarios') router.push('/modulos/horarios');
             if (kind === 'goals') router.push('/modulos/goals');
             if (kind === 'finanzas') router.push('/modulos/finanzas');
+            if (kind === 'inversiones') router.push('/modulos/inversiones');
           }}
         />
       ) : (

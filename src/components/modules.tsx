@@ -4,7 +4,7 @@ import { ColorValue, StyleSheet, View } from 'react-native';
 
 import { Text, TextInput } from '@/components/text';
 import { Btn } from '@/components/form';
-import { IconBusiness, IconCap, IconCar, IconCart, IconClock, IconNoMore, IconTarget, IconWallet } from '@/components/icons';
+import { IconBusiness, IconCap, IconCar, IconCart, IconClock, IconNoMore, IconTarget, IconTrend, IconWallet } from '@/components/icons';
 import { Card, Label, Row } from '@/components/ui';
 import { CATALOG, Module, ModuleKind } from '@/lib/modules';
 import { C, R } from '@/theme';
@@ -17,6 +17,7 @@ export function ModuleIcon({ kind, color, size = 22 }: { kind: ModuleKind; color
   if (kind === 'horarios') return <IconClock color={color} size={size} />;
   if (kind === 'goals') return <IconTarget color={color} size={size} />;
   if (kind === 'finanzas') return <IconWallet color={color} size={size} />;
+  if (kind === 'inversiones') return <IconTrend color={color} size={size} />;
   return <IconBusiness color={color} size={size} />;
 }
 

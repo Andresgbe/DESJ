@@ -51,6 +51,8 @@ export const C = {
   hudCore: color('hud-core'),
   hudCoreFill: color('hud-core-fill'),
   neuralCore: color('neural-core'),
+  /** Cian del holograma 3D de YO (solo para el holograma). */
+  hologram: color('hologram'),
 };
 
 /** Colores de los grupos del cerebro (NeuralCore), en el mismo orden que CLUSTERS en brain-graph.ts. */

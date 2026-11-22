@@ -6,6 +6,8 @@
 // - Con sesión: viven en Supabase (privadas por usuario). DESJ las ve y registra movimientos desde el chat.
 // - Sin nube: viven en el teléfono.
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import { amountsHidden, HIDDEN_AMOUNT } from '@/lib/privacy';
 import { useCallback, useRef, useState } from 'react';
 
 import { useAuth } from '@/lib/auth';
@@ -80,7 +82,13 @@ export function toUsd(amount: number, ratePerUsd: number): number {
 
 const fmt = (n: number, digits = 2) => n.toLocaleString('es-VE', { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
+/** Monto para mostrar; con "Ocultar montos" activado sale ••••. */
 export function money(usd: number): string {
+  return amountsHidden() ? HIDDEN_AMOUNT : fmt(usd);
+}
+
+/** Monto siempre visible (para un reporte que la persona decide compartir). */
+export function moneyExact(usd: number): string {
   return fmt(usd);
 }
 
@@ -91,7 +99,7 @@ export function rateText(n: number) {
 
 /** Monto original con el símbolo de su moneda. */
 export function amountLabel(tx: Pick<Transaction, 'amount' | 'currency'>): string {
-  const n = fmt(tx.amount);
+  const n = amountsHidden() ? HIDDEN_AMOUNT : fmt(tx.amount);
   if (tx.currency === 'USD') return `$${n}`;
   if (tx.currency === 'VES') return `Bs ${n}`;
   if (tx.currency === 'EUR') return `€${n}`;
@@ -127,6 +135,33 @@ export function daysInMonth(month: string): number {
   const [y, m] = month.split('-').map(Number);
   return new Date(y, m, 0).getDate();
 }
+/** Lunes (YYYY-MM-DD) de la semana de esa fecha; las semanas van de lunes a domingo. */
+export function weekStart(date: Date | string): string {
+  const d = typeof date === 'string' ? new Date(`${date}T12:00:00`) : new Date(date);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return isoOf(d);
+}
+
+/** Suma días a una fecha YYYY-MM-DD. */
+export function addDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return isoOf(d);
+}
+
+function isoOf(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** "17 al 23 de noviembre de 2026" (o "28 de oct. al 3 de nov. de 2026" si cambia de mes). */
+export function weekLabel(start: string): string {
+  const a = new Date(`${start}T12:00:00`);
+  const b = new Date(`${addDays(start, 6)}T12:00:00`);
+  const month = (d: Date, short = false) => d.toLocaleDateString('es-VE', { month: short ? 'short' : 'long' });
+  if (a.getMonth() === b.getMonth()) return `${a.getDate()} al ${b.getDate()} de ${month(b)} de ${b.getFullYear()}`;
+  return `${a.getDate()} de ${month(a, true)} al ${b.getDate()} de ${month(b, true)} de ${b.getFullYear()}`;
+}
+
 export function dayLabel(iso: string): string {
   const s = new Date(`${iso}T00:00:00`).toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long' });
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -297,6 +332,26 @@ export function useFinanceFlow() {
     [cloud],
   );
 
+  /** Movimientos entre dos fechas (incluidas), sin cambiar los que muestra la pantalla. Para los reportes. */
+  const fetchRange = useCallback(
+    async (from: string, to: string): Promise<Transaction[]> => {
+      if (!cloud) {
+        const local = await readLocal();
+        return local.transactions.filter((t) => t.occurred_on >= from && t.occurred_on <= to).sort(byRecent);
+      }
+      const { data, error } = await supabase
+        .from('finance_transactions')
+        .select(TX_COLS)
+        .gte('occurred_on', from)
+        .lte('occurred_on', to)
+        .order('occurred_on', { ascending: false })
+        .order('created_at', { ascending: false });
+      if (error) throw new Error('No pude cargar los movimientos. Revisa tu conexión.');
+      return data.map(normTx);
+    },
+    [cloud],
+  );
+
   /** Crea o edita. amount_usd se calcula aquí (no en la pantalla). Devuelve el movimiento guardado. */
   const saveTransaction = async (input: TransactionInput, id?: string): Promise<Transaction> => {
     const row = { ...input, amount_usd: toUsd(input.amount, input.rate_per_usd) };
@@ -428,6 +483,7 @@ export function useFinanceFlow() {
     transactions,
     loadSetup,
     loadMonth,
+    fetchRange,
     saveTransaction,
     placeInMonth,
     removeTransaction,

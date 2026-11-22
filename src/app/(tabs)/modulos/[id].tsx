@@ -43,6 +43,7 @@ export default function VehicleScreen() {
     if (mod?.kind === 'horarios') router.replace('/modulos/horarios');
     if (mod?.kind === 'goals') router.replace('/modulos/goals');
     if (mod?.kind === 'finanzas') router.replace('/modulos/finanzas');
+    if (mod?.kind === 'inversiones') router.replace('/modulos/inversiones');
   }, [mod?.kind]);
 
   if (!mod) {

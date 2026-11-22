@@ -2,7 +2,8 @@
 // tiene su propia vista y sus datos: hoy Negocios (uno por persona), Vehículo (uno por carro o moto, con su
 // ficha, mantenimientos y papeles en lib/vehicles.ts) NO MORE (uno por persona, con PIN; lib/nomore.ts)
 // TO BUY (lista de compras con categorías; lib/tobuy.ts), Universidad (lib/university.ts), Horarios
-// (lib/schedules.ts), Goals (lib/goals.ts) y Finanzas (lib/finance.ts; sus datos son de la persona, no del módulo).
+// (lib/schedules.ts), Goals (lib/goals.ts), Finanzas (lib/finance.ts) e Inversiones (lib/investments.ts); los datos de esos dos
+// últimos son de la persona, no del módulo.
 // - Con sesión: viven en Supabase (privados por usuario). DESJ los ve desde el chat.
 // - Sin nube: viven en el teléfono; la primera vez se arranca con Negocios.
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -11,7 +12,7 @@ import { useCallback, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 
-export type ModuleKind = 'negocios' | 'vehiculo' | 'nomore' | 'tobuy' | 'universidad' | 'horarios' | 'goals' | 'finanzas';
+export type ModuleKind = 'negocios' | 'vehiculo' | 'nomore' | 'tobuy' | 'universidad' | 'horarios' | 'goals' | 'finanzas' | 'inversiones';
 
 /** El catálogo: lo que se puede agregar. `multiple`: se puede tener más de uno (un vehículo por carro). */
 export const CATALOG: { kind: ModuleKind; label: string; description: string; multiple: boolean }[] = [
@@ -55,7 +56,13 @@ export const CATALOG: { kind: ModuleKind; label: string; description: string; mu
   {
     kind: 'finanzas',
     label: 'Finanzas',
-    description: 'Ingresos, gastos, deudas y presupuesto, todo llevado a dólar BCV para sumar bolívares, dólares, USDT y euros.',
+    description: 'Ingresos, gastos, deudas y presupuesto, todo llevado a dólar BCV para sumar bolívares, dólares, USDT y euros. Con reportes semanales y mensuales.',
+    multiple: false,
+  },
+  {
+    kind: 'inversiones',
+    label: 'Inversiones',
+    description: 'Lo que inviertes cada mes (en qué, dónde y cuánto), con totales, los últimos 12 meses y el reparto por activo.',
     multiple: false,
   },
 ];

@@ -1,4 +1,4 @@
-// Módulo 03 · YO: tu información personal alrededor de una armadura holográfica que gira, y la
+// Módulo 03 · YO: tu información personal alrededor de un holograma 3D de un cuerpo humano que gira, y la
 // entrada a tus módulos personales (Salud, Mis datos; Finanzas pasó a Módulos). Los datos salen de tus archivos
 // de conocimiento (perfil.md, salud.md) y de tus pastillas; lo que falta se muestra "[pendiente]".
 import { router, useFocusEffect, type Href } from "expo-router";
@@ -11,7 +11,7 @@ import {
 
 import { IconChevron } from "@/components/icons";
 import { Text } from "@/components/text";
-import { SUIT_RATIO, SuitCore } from "@/components/suit-core";
+import { Hologram, HOLOGRAM_RATIO } from "@/components/hologram";
 import { Label, Screen, Title } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { useLayout } from "@/lib/layout";
@@ -41,7 +41,7 @@ export default function Yo() {
   const { meds, taken } = useStore();
   const { width, height, column: layoutColumn } = useLayout();
 
-  // La armadura se pausa cuando YO no está a la vista; los datos se releen al volver.
+  // El holograma se pausa cuando YO no está a la vista; los datos se releen al volver.
   const [focused, setFocused] = useState(true);
   const reload = knowledge.reload;
   useFocusEffect(
@@ -67,7 +67,7 @@ export default function Yo() {
   // La figura ocupa el centro entre las dos columnas de datos, sin pasar de la mitad del alto.
   const column = Math.min(width, layoutColumn) - S.pad * 2;
   const figW = Math.min(column - STAT_W * 2 - S.gap * 2, 300);
-  const figH = Math.round(Math.min(figW / SUIT_RATIO, height * 0.5));
+  const figH = Math.round(Math.min(figW / HOLOGRAM_RATIO, height * 0.5));
 
   return (
     <Screen module="Módulo 03 · Yo">
@@ -101,9 +101,9 @@ export default function Yo() {
           style={{ alignItems: "center" }}
           accessible
           accessibilityRole="image"
-          accessibilityLabel="Armadura holográfica de DESJ girando"
+          accessibilityLabel="Holograma de un cuerpo humano girando"
         >
-          <SuitCore height={figH} active={focused} />
+          <Hologram height={figH} active={focused} />
           <Label style={styles.platform}>Configuración personal</Label>
         </View>
 

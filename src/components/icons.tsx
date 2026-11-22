@@ -212,6 +212,14 @@ export const IconLock = ({ color, size = 18 }: P) => (
   </Svg>
 );
 
+// Inversiones: línea que sube.
+export const IconTrend = ({ color, size = 22 }: P) => (
+  <Svg {...base(size, color)}>
+    <Path d="M3 17l6-6 4 4 8-8" />
+    <Path d="M15 7h6v6" />
+  </Svg>
+);
+
 // Finanzas: billetera.
 export const IconWallet = ({ color, size = 22 }: P) => (
   <Svg {...base(size, color)}>

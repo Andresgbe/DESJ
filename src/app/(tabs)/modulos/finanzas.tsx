@@ -1,6 +1,7 @@
 // Módulo Finanzas (antes en YO): ingresos, gastos, deudas y presupuesto mensual. Todo se lleva a una sola unidad, el dólar BCV,
 // para poder sumar bolívares, dólar efectivo, USDT y euros. Tres secciones independientes que se eligen en una
-// lista plegable: Ingresos y gastos (la principal), Deudas y Presupuesto.
+// lista plegable: Ingresos y gastos (la principal), Deudas, Presupuesto y Reportes (semanales y mensuales).
+// El ojo de arriba oculta todos los montos (se guarda en el dispositivo).
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -8,26 +9,37 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/text';
 import { Breakdown, CategoryManager, confirmRemoveTx, MissingRatesBanner, MonthChart, RatesCard, Totals, TransactionModal, TxList } from '@/components/finance';
 import { BillsTab, BudgetTab, MonthStepper } from '@/components/finance-lists';
+import { ReportTab } from '@/components/finance-report';
+import { HideAmountsButton } from '@/components/hide-amounts';
 import { Btn } from '@/components/form';
 import { IconChevron, IconPlus } from '@/components/icons';
 import { Screen, Title } from '@/components/ui';
 import { currentMonth, ratesStale, totals, Transaction, useFinanceFlow } from '@/lib/finance';
+import { useAmountsHidden } from '@/lib/privacy';
 import { C, R } from '@/theme';
 
-type Tab = 'flujo' | 'deudas' | 'presupuesto';
+type Tab = 'flujo' | 'deudas' | 'presupuesto' | 'reportes';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'flujo', label: 'Ingresos y gastos' },
   { id: 'deudas', label: 'Deudas' },
   { id: 'presupuesto', label: 'Presupuesto' },
+  { id: 'reportes', label: 'Reportes' },
 ];
 
 export default function Finanzas() {
   const [tab, setTab] = useState<Tab>('flujo');
+  // Al ocultar o mostrar los montos se vuelve a dibujar toda la pantalla.
+  useAmountsHidden();
   return (
     <Screen module="Módulo · Finanzas" back>
-      <Title accent="finanzas">Tus</Title>
+      <View style={styles.head}>
+        <View style={{ flex: 1 }}>
+          <Title accent="finanzas">Tus</Title>
+        </View>
+        <HideAmountsButton />
+      </View>
       <SectionPicker value={tab} onChange={setTab} />
-      {tab === 'flujo' ? <FlowTab /> : tab === 'deudas' ? <BillsTab /> : <BudgetTab />}
+      {tab === 'flujo' ? <FlowTab /> : tab === 'deudas' ? <BillsTab /> : tab === 'presupuesto' ? <BudgetTab /> : <ReportTab />}
     </Screen>
   );
 }
@@ -152,6 +164,7 @@ function FlowTab() {
 }
 
 const styles = StyleSheet.create({
+  head: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   bar: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   actions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   small: { flexGrow: 0, minHeight: 44, paddingHorizontal: 14 },
