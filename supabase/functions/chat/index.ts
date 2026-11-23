@@ -200,6 +200,10 @@ Deno.serve(async (req) => {
   }
 
   await saveUsage(db, model, used, cost);
+  if (/^\s*\[ALERTA\]\s*/i.test(reply)) {
+    actions.alert = true;
+    reply = reply.replace(/^\s*\[ALERTA\]\s*/i, '').trim();
+  }
   if (!reply) reply = 'Listo.';
   // Si buscó en internet, se nombran las fuentes al final (los sitios, no los enlaces largos de Google).
   if (sources.length) reply += `\n\nFuentes: ${sources.slice(0, 4).map((s) => s.title).join(', ')}.`;
@@ -215,7 +219,7 @@ Deno.serve(async (req) => {
     const [saved, touched] = await Promise.all([
       db.from('messages').insert([
         { conversation_id: conversationId, role: 'user', content: savedText },
-        { conversation_id: conversationId, role: 'assistant', content: reply },
+        { conversation_id: conversationId, role: 'assistant', content: reply, actions },
       ]),
       db.from('conversations').update({ updated_at: new Date().toISOString() }).eq('id', conversationId),
     ]);

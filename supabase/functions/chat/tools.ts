@@ -16,6 +16,7 @@ export type Actions = {
   knowledgeChanged: boolean;
   tasksChanged: boolean;
   financeChanged?: boolean;
+  alert?: boolean;
 };
 
 /** Archivos de base de Conocimiento; la persona puede tener más (cualquier slug de <conocimiento>). */

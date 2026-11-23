@@ -51,6 +51,8 @@ export const C = {
   hudCore: color('hud-core'),
   hudCoreFill: color('hud-core-fill'),
   neuralCore: color('neural-core'),
+  neuralAlertSoft: color('neural-alert-soft'),
+  neuralAlertDeep: color('neural-alert-deep'),
   /** Cian del holograma 3D de YO (solo para el holograma). */
   hologram: color('hologram'),
 };
@@ -62,6 +64,15 @@ export const NEURAL = [
   color('neural-negocios'),
   color('neural-salud'),
   color('neural-alertas'),
+];
+
+/** Colores de los 5 grupos del cerebro cuando DESJ está en modo Alerta (todos en gama roja). */
+export const NEURAL_ALERT = [
+  color('prism-alert'),
+  color('neural-alertas'),
+  color('bad'),
+  color('neural-alert-soft'),
+  color('neural-alert-deep'),
 ];
 
 /** Colores del wordmark D.E.S.J (marca): degradado de las letras y los puntos cuadrados. Solo para el logotipo. */

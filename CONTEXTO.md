@@ -1,7 +1,7 @@
 # DESJ — Contexto completo del proyecto
 
 > Documento vivo. Léelo antes de tocar el código (personas e IAs).
-> Última actualización: 2026-11-18.
+> Última actualización: 2026-11-23.
 
 ---
 
@@ -212,9 +212,7 @@ Inspirada en el carrusel de Adrián y en los grafos tipo "Jarvis": fondo casi ne
 | Escuchando | `prism-listening` | `#45B6FE` Cian Holográfico (PMS 2985 C) | dictado por voz activo | cuchillas un poco abiertas |
 | Pensando | `prism-thinking` | `#8EE0FF` azul muy clarito, con las sombras del vidrio en azul (`border`) para que no se vea plateado (antes `#A9DDFF`, y en la propuesta original `#596D8C` Gris Pizarra Azulado, PMS 7545 C) | DESJ prepara la respuesta | todo se acelera: el cerebro gira ~2× más rápido y las señales vuelan; las cuchillas del corazón laten rápido por turnos y respira más rápido |
 | Respondiendo | `prism-responding` | `#64F4AC` Verde Menta Neón (PMS 3385 C; antes `#8EA4C8` Azul Acero Claro, cambiado el 18 nov 2026) | lee la respuesta en voz alta (o 1,5 s al llegar si la voz está apagada) | cuchillas apenas abiertas |
-| Alerta | `prism-alert` | `#FF2A54` Rojo Neón Alerta (PMS 1925 C) | pendientes atrasados | cuchillas abiertas y respiración rápida |
-
-  [pendiente] conectar **Alerta** a los pendientes atrasados: el componente ya la soporta, pero hoy el Núcleo solo usa En línea, Escuchando, Pensando y Respondiendo.
+| Alerta | `prism-alert` | `#FF2A54` Rojo Neón Alerta (PMS 1925 C) | DESJ da una respuesta o noticia crítica/preocupante en el chat (p. ej. mantenimiento o pendiente atrasado como el cambio de aceite, papeles vencidos, valores fuera de rango) | cuchillas abiertas y respiración rápida; todo el cerebro 3D (`NEURAL_ALERT`), la red de fondo (`NeuralBackground`), el botón "Hablar con DESJ" y el borde de la burbuja pasan a rojo en el Núcleo |
 - **Resto de la paleta de la propuesta (referencia, no son tokens):** Abismo Nocturno `#040811` (PMS 296 C, fondo), Pizarra HUD `#0A1224` (PMS 282 C, tarjetas), Rojo Carmesí Vencido `#C8102E` (PMS 186 C, notificaciones pasadas y bordes de alerta). La app sigue con sus fondos `bg`/`card` y su verde `ok`; si se quiere adoptar alguno, primero se agrega como token.
 - **Regenerar los íconos** después de cambiar el logo: `node scripts/render-logo.mjs` (con Playwright) o `node scripts/render-logo.mjs <ruta a puppeteer-core>` (Chrome en Windows). Necesita Node 22.18 o más nuevo.
 

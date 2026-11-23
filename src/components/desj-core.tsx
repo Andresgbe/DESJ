@@ -30,6 +30,7 @@ type Props = { size?: number; display?: number; label?: string; state?: PrismSta
 
 export function DesjCore({ size = 260, display = size, label, state = 'online', active = true }: Props) {
   const thinking = state === 'thinking';
+  const alert = state === 'alert';
   const text = label ?? STATE_LABEL[state];
   const time = hhmmOf(useClock());
 
@@ -51,7 +52,7 @@ export function DesjCore({ size = 260, display = size, label, state = 'online', 
           <View style={styles.prism}>
             <Prism size={Math.round(size * PRISM_SIZE)} state={state} active={active} />
           </View>
-          <NeuralCore size={size} thinking={thinking} labels={display >= 220} active={active} />
+          <NeuralCore size={size} thinking={thinking} alert={alert} labels={display >= 220} active={active} />
         </Animated.View>
       </Animated.View>
     </View>

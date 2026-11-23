@@ -18,8 +18,8 @@ import { C, FONTS, mono, S } from '@/theme';
  * `menu`: botón en el lado izquierdo del header (p. ej. el menú hamburguesa del Núcleo).
  * `back`: muestra la flecha para volver (pantallas dentro de un módulo, como YO → Salud).
  */
-/** `overlay`: algo que flota sobre el contenido sin desplazarse con él (p. ej. el botón "+" del Calendario). */
-export function Screen({ children, scroll = true, wide = false, menu, back = false, overlay }: { /** Nombre del módulo ("Módulo 01 · Núcleo"). Ya no se muestra en el header; queda como referencia. */ module: string; children: ReactNode; scroll?: boolean; wide?: boolean; menu?: ReactNode; back?: boolean; overlay?: ReactNode }) {
+/** `overlay`: algo que flota sobre el contenido sin desplazarse con él (p. ej. el botón "+" del Calendario). `alert`: tiñe la red de fondo en rojo alerta (Núcleo). */
+export function Screen({ children, scroll = true, wide = false, menu, back = false, overlay, alert = false }: { /** Nombre del módulo ("Módulo 01 · Núcleo"). Ya no se muestra en el header; queda como referencia. */ module: string; children: ReactNode; scroll?: boolean; wide?: boolean; menu?: ReactNode; back?: boolean; overlay?: ReactNode; alert?: boolean }) {
   // Teléfono: columna de S.column. Computadora (ventana ≥ S.breakpoint): columna más ancha, S.columnDesk.
   const layout = useLayout();
   const h = layout.header;
@@ -33,7 +33,7 @@ export function Screen({ children, scroll = true, wide = false, menu, back = fal
   );
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <NeuralBackground />
+      <NeuralBackground alert={alert} />
       {/* En computadora el header va a todo lo ancho; en el teléfono, alineado con la columna. */}
       <View style={[styles.header, layout.wide ? { maxWidth: '100%' } : column, { paddingHorizontal: h.padX, paddingTop: h.padY, paddingBottom: h.padY / 2 }]}>
         {back ? (

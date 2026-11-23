@@ -13,19 +13,23 @@ import { ChatHistory } from '@/components/chat-history';
 import { ChatMenu } from '@/components/chat-menu';
 import { ChatActivity, ChatPanel } from '@/components/chat-panel';
 import { DesjCore, RESIZE, STATUS_HEIGHT } from '@/components/desj-core';
+import { IconAlert } from '@/components/icons';
 import { Screen } from '@/components/ui';
+import { startAlertSound, stopAlertSound } from '@/lib/alert-sound';
 import { useChats } from '@/lib/chats';
 import { useLayout } from '@/lib/layout';
-import { C, mono, S } from '@/theme';
+import { C, mono, PRISM, S } from '@/theme';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 const GAP = 10;
 const TALK_GAP = 28; // entre el cerebro y el botón
 const TALK_HEIGHT = 52;
+const DEMO_ALERT_TEXT =
+  'ERROR CRÍTICO. SE HAN DETECTADO MÚLTIPLES FALLAS EN LAS PLATAFORMAS DE SU NEGOCIO, SEÑOR. HAY QUE TOMAR ACCIONES AL RESPECTO.';
 
 export default function Nucleo() {
-  const { busy: thinking } = useChats();
+  const { busy: thinking, messages, pushAlert } = useChats();
   const [talking, setTalking] = useState(false);
   const [typing, setTyping] = useState(false);
   const [voice, setVoice] = useState(true);
@@ -33,15 +37,24 @@ export default function Nucleo() {
   const [area, setArea] = useState(0);
   const [pressed, setPressed] = useState(false);
   const [activity, setActivity] = useState<ChatActivity>(null);
+  const [demoAlert, setDemoAlert] = useState(false);
   // Las pestañas quedan montadas: el cerebro se pausa cuando el Núcleo no está a la vista.
   const [focused, setFocused] = useState(true);
   useFocusEffect(
     useCallback(() => {
       setFocused(true);
-      return () => setFocused(false);
+      return () => {
+        setFocused(false);
+        stopAlertSound();
+      };
     }, []),
   );
   const { width, height, column: layoutColumn } = useLayout();
+
+  // Si el último mensaje de la conversación es de DESJ y trae una noticia crítica (o se activó el botón de prueba), DESJ y el fondo del Núcleo se ponen en rojo alerta.
+  const lastMsg = messages[messages.length - 1];
+  const critical = Boolean(!thinking && (demoAlert || (lastMsg?.from === 'desj' && lastMsg.alert)));
+  const coreState = thinking ? 'thinking' : activity === 'listening' ? 'listening' : critical ? 'alert' : (activity ?? 'online');
 
   // Solo DESJ: el cerebro tan grande como quepa. Conversando: hasta el 32 % del alto.
   const column = Math.min(width, layoutColumn) - S.pad * 2;
@@ -71,6 +84,21 @@ export default function Nucleo() {
   const changeVoice = (on: boolean) => {
     setVoice(on);
     Speech.stop();
+    stopAlertSound();
+  };
+
+  const triggerDemoAlert = () => {
+    Speech.stop();
+    stopAlertSound();
+    if (demoAlert) {
+      setDemoAlert(false);
+      return;
+    }
+    setDemoAlert(true);
+    pushAlert(DEMO_ALERT_TEXT);
+    const stopSiren = startAlertSound();
+    const done = () => stopSiren();
+    Speech.speak(DEMO_ALERT_TEXT, { language: 'es-ES', rate: 1.0, pitch: 0.95, onDone: done, onStopped: done, onError: done });
   };
 
   const startTalking = () => {
@@ -81,6 +109,7 @@ export default function Nucleo() {
   const stopTalking = () => {
     Keyboard.dismiss();
     Speech.stop();
+    stopAlertSound();
     setTalking(false);
   };
 
@@ -90,23 +119,33 @@ export default function Nucleo() {
   };
 
   const menu = <ChatMenu voice={voice} onVoice={changeVoice} onHistory={openHistory} onNew={() => setTalking(true)} onBack={talking ? stopTalking : undefined} />;
+  const alertBtn = !typing ? (
+    <Pressable
+      onPress={triggerDemoAlert}
+      hitSlop={8}
+      style={[styles.alertFab, demoAlert && styles.alertFabActive, talking && styles.alertFabTalking]}
+      accessibilityRole="button"
+      accessibilityLabel={demoAlert ? 'Desactivar alerta crítica' : 'Simular alerta crítica'}>
+      <IconAlert color={demoAlert ? C.onAccent : C.bad} size={18} />
+    </Pressable>
+  ) : null;
 
   return (
-    <Screen module="Módulo 01 · Núcleo" scroll={false} menu={menu}>
+    <Screen module="Módulo 01 · Núcleo" scroll={false} menu={menu} alert={critical} overlay={alertBtn}>
       <KeyboardAvoidingView
         style={{ flex: 1, gap: GAP }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={90}
         onLayout={(e) => setArea(e.nativeEvent.layout.height)}>
         <Animated.View style={[{ alignItems: 'center' }, liftStyle]}>
-          <DesjCore size={big} display={display} state={thinking ? 'thinking' : (activity ?? 'online')} active={focused} />
+          <DesjCore size={big} display={display} state={coreState} active={focused} />
           {!talking ? (
             <Animated.View entering={FadeIn.duration(250)} exiting={FadeOut.duration(150)} style={{ marginTop: TALK_GAP }}>
               <AnimatedPressable
                 onPress={startTalking}
                 onPressIn={() => setPressed(true)}
                 onPressOut={() => setPressed(false)}
-                style={[styles.talk, pressed && styles.talkPressed]}
+                style={[styles.talk, critical && styles.talkAlert, pressed && styles.talkPressed]}
                 accessibilityRole="button">
                 <Text style={styles.talkText}>Hablar con DESJ</Text>
               </AnimatedPressable>
@@ -135,6 +174,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     boxShadow: `0 0 24px ${C.accent}73`,
   },
+  talkAlert: {
+    backgroundColor: PRISM.alert,
+    boxShadow: `0 0 24px ${PRISM.alert}73`,
+  },
   talkPressed: { transform: [{ scale: 0.97 }] },
   talkText: { color: C.onAccent, fontFamily: mono, fontSize: 13, fontWeight: '700', letterSpacing: 3, textTransform: 'uppercase' },
+  alertFab: {
+    position: 'absolute',
+    right: S.pad,
+    bottom: 14,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: C.cardBorder,
+    backgroundColor: C.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    opacity: 0.78,
+  },
+  alertFabTalking: {
+    bottom: undefined,
+    top: 56,
+  },
+  alertFabActive: {
+    backgroundColor: PRISM.alert,
+    borderColor: PRISM.alert,
+    opacity: 1,
+    boxShadow: `0 0 18px ${PRISM.alert}80`,
+  },
 });

@@ -7,13 +7,13 @@ import { createContext, ReactNode, useCallback, useContext, useEffect, useRef, u
 
 import { Attachment, Uploaded, uploadAttachment } from '@/lib/attachments';
 import { useAuth } from '@/lib/auth';
-import { askDesj, countUnanswered, retryQueue, RetryProgress, RetryResult, think } from '@/lib/brain';
+import { askDesj, countUnanswered, parseAlertReply, retryQueue, RetryProgress, RetryResult, think } from '@/lib/brain';
 import { today, useStore } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 
 export type Conversation = { id: string; title: string; updatedAt: string };
-/** `status` (solo mensajes tuyos en la nube): 'pending' sigue en la cola del worker, 'error' no se pudo responder. */
-export type ChatMsg = { id: string; from: 'me' | 'desj'; text: string; attachments?: string[]; status?: 'pending' | 'error' };
+/** `status` (solo mensajes tuyos en la nube): 'pending' sigue en la cola del worker, 'error' no se pudo responder. `alert`: respuesta crítica de DESJ. */
+export type ChatMsg = { id: string; from: 'me' | 'desj'; text: string; attachments?: string[]; status?: 'pending' | 'error'; alert?: boolean };
 
 // En la nube cada adjunto se guarda como una línea "[Adjunto: nombre]" al final del mensaje.
 const ATTACHMENT_LINE = /\n?\[Adjunto: (.+)\]$/gm;
@@ -31,6 +31,8 @@ type Ctx = {
   busy: boolean;
   /** Envía un mensaje (y opcionalmente archivos) en la conversación activa o en una nueva. Devuelve la respuesta de DESJ. */
   send: (text: string, files?: Attachment[]) => Promise<string | null>;
+  /** Inyecta un mensaje crítico de DESJ directamente en la conversación actual (p. ej. botón de prueba de alerta). */
+  pushAlert: (text: string) => void;
   newChat: () => void;
   open: (id: string) => Promise<void>;
   remove: (id: string) => Promise<void>;
@@ -75,14 +77,17 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
   const loadMessages = useCallback(async (id: string) => {
     const { data } = await supabase
       .from('messages')
-      .select('id, role, content, status')
+      .select('id, role, content, status, actions')
       .eq('conversation_id', id)
       .order('created_at', { ascending: true })
       .limit(200);
     return (data ?? []).map((r): ChatMsg => {
       const names = [...r.content.matchAll(ATTACHMENT_LINE)].map((m) => m[1]);
       const status = r.role === 'user' && (r.status === 'pending' || r.status === 'running' || r.status === 'error') ? (r.status === 'error' ? 'error' : 'pending') : undefined;
-      return { id: r.id, from: r.role === 'user' ? 'me' : 'desj', text: names.length ? r.content.replace(ATTACHMENT_LINE, '').trim() : r.content, attachments: names.length ? names : undefined, status };
+      const clean = names.length ? r.content.replace(ATTACHMENT_LINE, '').trim() : r.content;
+      const act = r.actions && typeof r.actions === 'object' ? (r.actions as { alert?: boolean }) : undefined;
+      const parsed = r.role === 'assistant' ? parseAlertReply(clean, act?.alert) : { text: clean, alert: false };
+      return { id: r.id, from: r.role === 'user' ? 'me' : 'desj', text: parsed.text, attachments: names.length ? names : undefined, status, ...(parsed.alert ? { alert: true } : {}) };
     });
   }, []);
 
@@ -152,7 +157,7 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
           }
         }
         const res = await askDesj(text, activeId, 'chat', uploaded);
-        const answer: ChatMsg = { id: `${Date.now()}r`, from: 'desj', text: res.reply };
+        const answer: ChatMsg = { id: `${Date.now()}r`, from: 'desj', text: res.reply, ...(res.alert ? { alert: true } : {}) };
         setMessages((m) => [...m.map((x) => (x.id === mine.id && res.queued ? { ...x, status: 'pending' as const } : x)), answer]);
         if (res.queued) checkQueue();
         if (res.dataChanged) refresh();
@@ -168,10 +173,11 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
         return res.reply;
       }
 
-      const reply = files.length
+      const rawReply = files.length
         ? `Recibí ${files.length === 1 ? `"${files[0].name}"` : `${files.length} archivos`}. Para leer archivos necesito estar conectado al cerebro (Claude); por ahora quedan solo en este chat.`
         : await think(text, { meds, takenKeys: taken[today()] ?? [] });
-      const answer: ChatMsg = { id: `${Date.now()}r`, from: 'desj', text: reply };
+      const parsed = parseAlertReply(rawReply);
+      const answer: ChatMsg = { id: `${Date.now()}r`, from: 'desj', text: parsed.text, ...(parsed.alert ? { alert: true } : {}) };
       const id = activeId ?? `c${Date.now()}`;
       const current = local.find((c) => c.id === id);
       const updated: LocalConversation = {
@@ -183,7 +189,7 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
       saveLocal([updated, ...local.filter((c) => c.id !== id)]);
       setActiveId(id);
       setMessages(updated.messages);
-      return reply;
+      return parsed.text;
     } finally {
       setBusy(false);
     }
@@ -194,6 +200,10 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     setActiveId(null);
     setMessages([]);
   };
+
+  const pushAlert = useCallback((text: string) => {
+    setMessages((m) => [...m, { id: `${Date.now()}a`, from: 'desj', text, alert: true }]);
+  }, []);
 
   const open = async (id: string) => {
     if (busy || id === activeId) return;
@@ -261,7 +271,7 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <ChatsCtx.Provider value={{ ready, conversations, activeId, messages, busy, send, newChat, open, remove, rename, unanswered: cloud ? unanswered : 0, retrying, retry }}>
+    <ChatsCtx.Provider value={{ ready, conversations, activeId, messages, busy, send, pushAlert, newChat, open, remove, rename, unanswered: cloud ? unanswered : 0, retrying, retry }}>
       {children}
     </ChatsCtx.Provider>
   );

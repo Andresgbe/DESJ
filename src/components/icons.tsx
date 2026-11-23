@@ -272,3 +272,12 @@ export const IconTrash = ({ color, size = 16 }: P) => (
     <Path d="M6 7l1 13h10l1-13" />
   </Svg>
 );
+
+// Alerta crítica (signo de exclamación).
+export const IconAlert = ({ color, size = 18 }: P) => (
+  <Svg {...base(size, color)}>
+    <Path d="M12 6.5v6.5" strokeWidth={2.2} />
+    <Circle cx={12} cy={17} r={0.9} fill={color} />
+  </Svg>
+);
+

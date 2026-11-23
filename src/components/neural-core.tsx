@@ -25,18 +25,20 @@ import { Easing, useDerivedValue, useFrameCallback, useSharedValue, withTiming }
 
 import { buildGraph, CLUSTER_COUNT, CLUSTERS, computeFrame, DEPTHS, NODE_STYLE, type Frame } from '@/components/brain-graph';
 import { useMotion } from '@/lib/motion';
-import { C, monoSystem, NEURAL } from '@/theme';
+import { C, monoSystem, NEURAL, NEURAL_ALERT, PRISM } from '@/theme';
 
 /** `active={false}` pausa el giro (p. ej. cuando la pantalla no está a la vista). */
-export type NeuralCoreProps = { size: number; thinking?: boolean; labels?: boolean; active?: boolean };
+export type NeuralCoreProps = { size: number; thinking?: boolean; alert?: boolean; labels?: boolean; active?: boolean };
 
 const STEP = 1 / 30 - 0.002; // segundos entre cuadros (con margen para no saltarse uno de cada dos)
 
 const COLORS = NEURAL.map((c) => Skia.Color(c));
+const ALERT_COLORS = NEURAL_ALERT.map((c) => Skia.Color(c));
 const TEXT = Skia.Color(C.text);
 
-function draw(canvas: SkCanvas, f: Frame, energy: number, font: SkFont | null, widths: number[]) {
+function draw(canvas: SkCanvas, f: Frame, energy: number, alertMode: boolean, font: SkFont | null, widths: number[]) {
   'worklet';
+  const palette = alertMode ? ALERT_COLORS : COLORS;
   const paint = Skia.Paint();
   paint.setAntiAlias(true);
   paint.setStyle(PaintStyle.Stroke);
@@ -48,7 +50,7 @@ function draw(canvas: SkCanvas, f: Frame, energy: number, font: SkFont | null, w
     for (let c = 0; c < CLUSTER_COUNT; c++) {
       const pts = f.edges[c * 2 + d];
       if (!pts.length) continue;
-      paint.setColor(COLORS[c]);
+      paint.setColor(palette[c]);
       paint.setAlphaf(d ? 0.2 + energy * 0.12 : 0.07);
       canvas.drawPoints(PointMode.Lines, pts, paint);
     }
@@ -61,7 +63,7 @@ function draw(canvas: SkCanvas, f: Frame, energy: number, font: SkFont | null, w
         const pts = f.nodes[(c * DEPTHS + d) * 2 + b];
         if (!pts.length) continue;
         const r = NODE_STYLE.radius[d][b] * f.k;
-        paint.setColor(COLORS[c]);
+        paint.setColor(palette[c]);
         if (d === DEPTHS - 1) {
           paint.setStrokeWidth(r * 6);
           paint.setAlphaf(0.1);
@@ -78,7 +80,7 @@ function draw(canvas: SkCanvas, f: Frame, energy: number, font: SkFont | null, w
   for (let c = 0; c < CLUSTER_COUNT; c++) {
     const pts = f.signals[c];
     if (!pts.length) continue;
-    paint.setColor(COLORS[c]);
+    paint.setColor(palette[c]);
     paint.setAlphaf(0.35);
     paint.setStrokeWidth(5 * f.k);
     canvas.drawPoints(PointMode.Points, pts, paint);
@@ -96,10 +98,10 @@ function draw(canvas: SkCanvas, f: Frame, energy: number, font: SkFont | null, w
   glow.setMaskFilter(Skia.MaskFilter.MakeBlur(BlurStyle.Normal, 5 * f.k, true));
   for (const h of f.hubs) {
     const a = 0.45 + h.depth * 0.55;
-    glow.setColor(COLORS[h.c]);
+    glow.setColor(palette[h.c]);
     glow.setAlphaf(0.55 * a);
     canvas.drawCircle(h.x, h.y, h.r * 2, glow);
-    fill.setColor(COLORS[h.c]);
+    fill.setColor(palette[h.c]);
     fill.setAlphaf(a);
     canvas.drawCircle(h.x, h.y, h.r, fill);
     if (font) {
@@ -110,7 +112,7 @@ function draw(canvas: SkCanvas, f: Frame, energy: number, font: SkFont | null, w
   }
 }
 
-export function NeuralCore({ size, thinking = false, labels = true, active = true }: NeuralCoreProps) {
+export function NeuralCore({ size, thinking = false, alert = false, labels = true, active = true }: NeuralCoreProps) {
   const { still } = useMotion();
   const graph = useMemo(() => buildGraph(), []);
   const half = size / 2;
@@ -128,14 +130,17 @@ export function NeuralCore({ size, thinking = false, labels = true, active = tru
 
   const angle = useSharedValue(0.7);
   const time = useSharedValue(0);
-  const energy = useSharedValue(thinking ? 1 : 0);
+  const targetEnergy = thinking ? 1 : alert ? 0.55 : 0;
+  const energy = useSharedValue(targetEnergy);
+  const alertVal = useSharedValue(alert ? 1 : 0);
   const pending = useSharedValue(0);
 
   useEffect(() => {
-    energy.set(withTiming(thinking ? 1 : 0, { duration: 700, easing: Easing.bezier(0.77, 0, 0.175, 1) }));
-  }, [thinking, energy]);
+    energy.set(withTiming(targetEnergy, { duration: 700, easing: Easing.bezier(0.77, 0, 0.175, 1) }));
+    alertVal.set(alert ? 1 : 0);
+  }, [targetEnergy, alert, energy, alertVal]);
 
-  // Giro lento en reposo; al pensar acelera. Solo cambia cada 1/30 s: el cuadro se recalcula
+  // Giro lento en reposo; al pensar o en alerta acelera. Solo cambia cada 1/30 s: el cuadro se recalcula
   // únicamente cuando cambian estos valores.
   const frames = useFrameCallback((info) => {
     const dt = pending.get() + Math.min(0.05, (info.timeSincePreviousFrame ?? 16) / 1000);
@@ -151,16 +156,17 @@ export function NeuralCore({ size, thinking = false, labels = true, active = tru
 
   const picture = useDerivedValue(() =>
     createPicture(
-      (canvas) => draw(canvas, computeFrame(graph, size, angle.get(), time.get(), energy.get()), energy.get(), font, widths),
+      (canvas) => draw(canvas, computeFrame(graph, size, angle.get(), time.get(), energy.get()), energy.get(), alertVal.get() > 0.5, font, widths),
       { width: size, height: size },
     ),
   );
   const glowOpacity = useDerivedValue(() => 0.45 + energy.get() * 0.55);
+  const glowColors = alert ? [`${PRISM.alert}77`, `${C.bad}29`, `${C.bg}00`] : [`${C.neuralCore}66`, `${C.accent}1f`, `${C.bg}00`];
 
   return (
     <Canvas style={{ width: size, height: size }} pointerEvents="none">
       <Circle cx={half} cy={half} r={size * 0.32} opacity={glowOpacity}>
-        <RadialGradient c={vec(half, half)} r={size * 0.32} colors={[`${C.neuralCore}66`, `${C.accent}1f`, `${C.bg}00`]} />
+        <RadialGradient c={vec(half, half)} r={size * 0.32} colors={glowColors} />
       </Circle>
       <Picture picture={picture} />
     </Canvas>

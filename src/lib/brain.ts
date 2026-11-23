@@ -18,12 +18,24 @@ type Actions = {
   medsChanged: boolean;
   intakesChanged: boolean;
   knowledgeChanged: boolean;
+  alert?: boolean;
 };
 
 type ChatReply = { reply: string; conversation_id: string | null; title: string | null; actions: Actions };
 
-/** `queued`: el worker no lo tomó a tiempo y el mensaje quedó esperando en la cola. */
-type AskResult = { reply: string; dataChanged: boolean; knowledgeChanged: boolean; conversationId: string | null; failed: boolean; queued?: boolean };
+/** `queued`: el worker no lo tomó a tiempo y el mensaje quedó esperando en la cola. `alert`: DESJ dio una noticia crítica o preocupante. */
+type AskResult = { reply: string; dataChanged: boolean; knowledgeChanged: boolean; conversationId: string | null; failed: boolean; queued?: boolean; alert?: boolean };
+
+const ALERT_TAG = /^\s*\[ALERTA\]\s*/i;
+const CRITICAL_SPEECH =
+  /\b(atrasad[oa]s?|vencid[oa]s?|venci[oó]|se\s+pas[oó]|pasad[oa]\s+de\s+fecha|no\s+(?:cambiaste|hiciste|pagaste|tomaste)|urgente|cr[ií]tic[oa]|peligro|cuidado|alerta|preocupante|grave|emergencia|fuera\s+de\s+rango|atenci[oó]n\s+m[eé]dica\s+de\s+inmediato)\b/i;
+
+/** Limpia la marca [ALERTA] si viene en el texto y detecta si la respuesta de DESJ es una noticia crítica o preocupante. */
+export function parseAlertReply(raw: string, explicit?: boolean): { text: string; alert: boolean } {
+  const tagged = ALERT_TAG.test(raw);
+  const text = raw.replace(ALERT_TAG, '').trim();
+  return { text, alert: Boolean(explicit || tagged || CRITICAL_SPEECH.test(text)) };
+}
 type Mode = 'chat' | 'conocimiento';
 
 const QUEUE_POLL_MS = 1500;
@@ -178,7 +190,8 @@ export async function retryQueue(onProgress?: (p: RetryProgress) => void): Promi
 
 /** Ejecuta en el teléfono lo que DESJ decidió: avisos locales y eventos del calendario. */
 async function runActions(reply: string, actions: Actions | null) {
-  let text = reply;
+  const parsed = parseAlertReply(reply, actions?.alert);
+  let text = parsed.text;
   for (const r of actions?.reminders ?? []) {
     await addReminder({ id: r.id, title: r.title, body: r.body, at: new Date(r.due_at), repeat: r.repeat });
   }
@@ -188,6 +201,7 @@ async function runActions(reply: string, actions: Actions | null) {
   }
   return {
     reply: text,
+    alert: parsed.alert,
     dataChanged: Boolean(actions?.medsChanged || actions?.intakesChanged),
     knowledgeChanged: Boolean(actions?.knowledgeChanged),
   };

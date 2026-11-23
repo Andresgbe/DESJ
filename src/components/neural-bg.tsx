@@ -9,7 +9,7 @@ import Animated from 'react-native-reanimated';
 import Svg, { Circle, Defs, Line, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import { useMotion } from '@/lib/motion';
-import { C } from '@/theme';
+import { C, PRISM } from '@/theme';
 
 const CELL = 120; // un nodo por celda de ~120 px: densidad pareja sin saturar
 const MAX_NODES = 90;
@@ -84,26 +84,28 @@ const PULSE = {
   '100%': { opacity: 0, transform: [{ scale: 0.6 }] },
 };
 
-export function NeuralBackground() {
+export function NeuralBackground({ alert = false }: { alert?: boolean }) {
   const { width, height } = useWindowDimensions();
   const { still: reduced } = useMotion();
   const net = useMemo(() => buildNetwork(width, height), [width, height]);
+  const main = alert ? PRISM.alert : C.accent;
+  const soft = alert ? C.neuralAlertSoft : C.accentSoft;
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       <Svg width={width} height={height}>
         <Defs>
           <RadialGradient id="glow" cx="50%" cy="28%" r="60%">
-            <Stop offset="0" stopColor={C.accent} stopOpacity={0.16} />
-            <Stop offset="1" stopColor={C.accent} stopOpacity={0} />
+            <Stop offset="0" stopColor={main} stopOpacity={alert ? 0.24 : 0.16} />
+            <Stop offset="1" stopColor={main} stopOpacity={0} />
           </RadialGradient>
         </Defs>
         <Rect width={width} height={height} fill="url(#glow)" />
         {net.edges.map(([a, b], i) => (
-          <Line key={i} x1={net.nodes[a].x} y1={net.nodes[a].y} x2={net.nodes[b].x} y2={net.nodes[b].y} stroke={C.accent} strokeOpacity={0.2} strokeWidth={0.9} />
+          <Line key={i} x1={net.nodes[a].x} y1={net.nodes[a].y} x2={net.nodes[b].x} y2={net.nodes[b].y} stroke={main} strokeOpacity={alert ? 0.28 : 0.2} strokeWidth={0.9} />
         ))}
         {net.nodes.map((n, i) => (
-          <Circle key={i} cx={n.x} cy={n.y} r={n.r} fill={C.accentSoft} fillOpacity={0.55} />
+          <Circle key={i} cx={n.x} cy={n.y} r={n.r} fill={soft} fillOpacity={0.55} />
         ))}
       </Svg>
 
@@ -114,6 +116,7 @@ export function NeuralBackground() {
               key={`p${i}`}
               style={[
                 styles.pulse,
+                alert && styles.pulseAlert,
                 { left: p.x - 6, top: p.y - 6 },
                 {
                   animationName: PULSE,
@@ -133,6 +136,7 @@ export function NeuralBackground() {
               key={`s${i}`}
               style={[
                 styles.signal,
+                alert && styles.signalAlert,
                 { left: s.from.x - 2, top: s.from.y - 2 },
                 {
                   animationName: s.keyframes,
@@ -149,6 +153,8 @@ export function NeuralBackground() {
 }
 
 const styles = StyleSheet.create({
-  pulse: { position: 'absolute', width: 12, height: 12, borderRadius: 6, backgroundColor: 'rgba(47,155,255,0.35)', borderWidth: 1, borderColor: 'rgba(143,208,255,0.6)', opacity: 0 },
+  pulse: { position: 'absolute', width: 12, height: 12, borderRadius: 6, backgroundColor: `${C.accent}59`, borderWidth: 1, borderColor: `${C.accentSoft}99`, opacity: 0 },
+  pulseAlert: { backgroundColor: `${PRISM.alert}59`, borderColor: `${C.neuralAlertSoft}99` },
   signal: { position: 'absolute', width: 4, height: 4, borderRadius: 2, backgroundColor: C.accentSoft, shadowColor: C.accent, shadowOpacity: 1, shadowRadius: 4, opacity: 0 },
+  signalAlert: { backgroundColor: C.neuralAlertSoft, shadowColor: PRISM.alert },
 });

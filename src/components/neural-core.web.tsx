@@ -5,9 +5,9 @@ import { useEffect, useMemo, useRef } from 'react';
 
 import { buildGraph, CLUSTER_COUNT, computeFrame, DEPTHS, NODE_STYLE, type Frame, type Pt } from '@/components/brain-graph';
 import { useMotion } from '@/lib/motion';
-import { C, mono, NEURAL } from '@/theme';
+import { C, mono, NEURAL, NEURAL_ALERT, PRISM } from '@/theme';
 
-export type NeuralCoreProps = { size: number; thinking?: boolean; labels?: boolean; active?: boolean };
+export type NeuralCoreProps = { size: number; thinking?: boolean; alert?: boolean; labels?: boolean; active?: boolean };
 
 const STEP = 1 / 30 - 0.002; // segundos entre cuadros (con margen para no saltarse uno de cada dos)
 
@@ -31,13 +31,14 @@ function lines(ctx: CanvasRenderingContext2D, pts: Pt[]) {
   ctx.stroke();
 }
 
-function draw(ctx: CanvasRenderingContext2D, size: number, f: Frame, energy: number, labels: boolean) {
+function draw(ctx: CanvasRenderingContext2D, size: number, f: Frame, energy: number, alert: boolean, labels: boolean) {
   ctx.clearRect(0, 0, size, size);
   const half = size / 2;
+  const palette = alert ? NEURAL_ALERT : NEURAL;
 
   const g = ctx.createRadialGradient(half, half, 0, half, half, size * 0.32);
-  g.addColorStop(0, `${C.neuralCore}66`);
-  g.addColorStop(0.5, `${C.accent}1f`);
+  g.addColorStop(0, alert ? `${PRISM.alert}77` : `${C.neuralCore}66`);
+  g.addColorStop(0.5, alert ? `${C.bad}29` : `${C.accent}1f`);
   g.addColorStop(1, `${C.bg}00`);
   ctx.globalAlpha = 0.45 + energy * 0.55;
   ctx.fillStyle = g;
@@ -47,7 +48,7 @@ function draw(ctx: CanvasRenderingContext2D, size: number, f: Frame, energy: num
   ctx.lineWidth = 0.6 * f.k;
   for (let d = 0; d < 2; d++) {
     for (let c = 0; c < CLUSTER_COUNT; c++) {
-      ctx.strokeStyle = NEURAL[c];
+      ctx.strokeStyle = palette[c];
       ctx.globalAlpha = d ? 0.2 + energy * 0.12 : 0.07;
       lines(ctx, f.edges[c * 2 + d]);
     }
@@ -55,7 +56,7 @@ function draw(ctx: CanvasRenderingContext2D, size: number, f: Frame, energy: num
 
   for (let d = 0; d < DEPTHS; d++) {
     for (let c = 0; c < CLUSTER_COUNT; c++) {
-      ctx.fillStyle = NEURAL[c];
+      ctx.fillStyle = palette[c];
       for (let b = 0; b < 2; b++) {
         const pts = f.nodes[(c * DEPTHS + d) * 2 + b];
         const r = NODE_STYLE.radius[d][b] * f.k;
@@ -70,7 +71,7 @@ function draw(ctx: CanvasRenderingContext2D, size: number, f: Frame, energy: num
   }
 
   for (let c = 0; c < CLUSTER_COUNT; c++) {
-    ctx.fillStyle = NEURAL[c];
+    ctx.fillStyle = palette[c];
     ctx.globalAlpha = 0.35;
     dots(ctx, f.signals[c], 2.5 * f.k);
     ctx.fillStyle = C.text;
@@ -82,8 +83,8 @@ function draw(ctx: CanvasRenderingContext2D, size: number, f: Frame, energy: num
   ctx.textAlign = 'center';
   for (const h of f.hubs) {
     const a = 0.45 + h.depth * 0.55;
-    ctx.fillStyle = NEURAL[h.c];
-    ctx.shadowColor = NEURAL[h.c];
+    ctx.fillStyle = palette[h.c];
+    ctx.shadowColor = palette[h.c];
     ctx.shadowBlur = 12 * f.k;
     ctx.globalAlpha = a;
     dots(ctx, [h], h.r);
@@ -97,19 +98,22 @@ function draw(ctx: CanvasRenderingContext2D, size: number, f: Frame, energy: num
   ctx.globalAlpha = 1;
 }
 
-export function NeuralCore({ size, thinking = false, labels = true, active = true }: NeuralCoreProps) {
+export function NeuralCore({ size, thinking = false, alert = false, labels = true, active = true }: NeuralCoreProps) {
   const { still } = useMotion();
   const graph = useMemo(() => buildGraph(), []);
   const ref = useRef<HTMLCanvasElement>(null);
-  const target = useRef(thinking ? 1 : 0);
-  const state = useRef({ angle: 0.7, time: 0, energy: thinking ? 1 : 0 });
+  const targetEnergy = thinking ? 1 : alert ? 0.55 : 0;
+  const target = useRef(targetEnergy);
+  const alertRef = useRef(alert);
+  const state = useRef({ angle: 0.7, time: 0, energy: targetEnergy });
   const running = active && !still;
-  // Quieto, se vuelve a dibujar si DESJ empieza o termina de pensar (cambia el brillo del núcleo).
-  const stillThinking = running ? null : thinking;
+  // Quieto, se vuelve a dibujar si DESJ empieza o termina de pensar o cambia el modo de alerta.
+  const stillState = running ? null : `${thinking}:${alert}`;
 
   useEffect(() => {
-    target.current = thinking ? 1 : 0;
-  }, [thinking]);
+    target.current = targetEnergy;
+    alertRef.current = alert;
+  }, [targetEnergy, alert]);
 
   useEffect(() => {
     const canvas = ref.current;
@@ -122,7 +126,7 @@ export function NeuralCore({ size, thinking = false, labels = true, active = tru
     const showLabels = labels && size >= 220;
     const paint = () => {
       const s = state.current;
-      draw(ctx, size, computeFrame(graph, size, s.angle, s.time, s.energy), s.energy, showLabels);
+      draw(ctx, size, computeFrame(graph, size, s.angle, s.time, s.energy), s.energy, alertRef.current, showLabels);
     };
 
     // Estático (animaciones en OFF o fuera de vista): un solo dibujo, sin bucle.
@@ -141,7 +145,7 @@ export function NeuralCore({ size, thinking = false, labels = true, active = tru
       last = now;
       const s = state.current;
       const step = Math.min(0.05, dt);
-      // La energía se acerca a su objetivo en ~0.7 s (pensando = 1, en reposo = 0).
+      // La energía se acerca a su objetivo en ~0.7 s (pensando = 1, alerta = 0.55, en reposo = 0).
       s.energy += (target.current - s.energy) * Math.min(1, step * 4);
       s.time += step;
       s.angle += step * (0.09 + s.energy * 1);
@@ -149,7 +153,7 @@ export function NeuralCore({ size, thinking = false, labels = true, active = tru
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [graph, size, labels, running, stillThinking]);
+  }, [graph, size, labels, running, stillState]);
 
   return <canvas ref={ref} style={{ width: size, height: size, display: 'block', pointerEvents: 'none' }} />;
 }

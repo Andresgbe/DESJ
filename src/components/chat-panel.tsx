@@ -11,7 +11,9 @@ import Svg, { Path } from 'react-native-svg';
 import { Text, TextInput } from '@/components/text';
 import { IconClip, IconClose, IconFile, IconMic, IconRetry, IconStop } from '@/components/icons';
 import { Label } from '@/components/ui';
+import { startAlertSound, stopAlertSound } from '@/lib/alert-sound';
 import { Attachment, MAX_FILES, MAX_TOTAL, pickAttachments } from '@/lib/attachments';
+import { parseAlertReply } from '@/lib/brain';
 import { ChatMsg, useChats } from '@/lib/chats';
 import { dictationAvailable, startDictation } from '@/lib/dictation';
 import { C, R } from '@/theme';
@@ -63,6 +65,7 @@ export function ChatPanel({ voice, onActivity }: { voice: boolean; onActivity?: 
   useEffect(
     () => () => {
       if (flash.current) clearTimeout(flash.current);
+      stopAlertSound();
       onActivity?.(null);
     },
     [onActivity],
@@ -92,13 +95,21 @@ export function ChatPanel({ voice, onActivity }: { voice: boolean; onActivity?: 
     const reply = await send(text, sending);
     if (!reply) return;
     if (flash.current) clearTimeout(flash.current);
+    const isAlert = parseAlertReply(reply).alert;
+    const stopSiren = isAlert ? startAlertSound() : null;
     setSpeaking(true);
     if (voice) {
-      // Al cortar la lectura (Speech.stop: voz apagada, dictado, cerrar el chat) también vuelve a reposo.
-      const done = () => setSpeaking(false);
+      // Al cortar la lectura (Speech.stop: voz apagada, dictado, cerrar el chat) también vuelve a reposo y apaga la alarma.
+      const done = () => {
+        stopSiren?.();
+        setSpeaking(false);
+      };
       Speech.speak(reply, { language: 'es-ES', rate: 1.0, onDone: done, onStopped: done, onError: done });
     } else {
-      flash.current = setTimeout(() => setSpeaking(false), REPLY_FLASH);
+      flash.current = setTimeout(() => {
+        stopSiren?.();
+        setSpeaking(false);
+      }, isAlert ? 4000 : REPLY_FLASH);
     }
   };
 
@@ -168,7 +179,7 @@ export function ChatPanel({ voice, onActivity }: { voice: boolean; onActivity?: 
         }}
         renderItem={({ item }) => (
           <View style={item.from === 'me' ? styles.meWrap : undefined}>
-            <View style={item.from === 'me' ? styles.me : styles.bot}>
+            <View style={item.from === 'me' ? styles.me : [styles.bot, item.alert && styles.botAlert]}>
               {item.attachments?.map((name, i) => (
                 <View key={`${name}${i}`} style={styles.attached}>
                   <IconFile color={C.accentSoft} size={15} />
@@ -338,6 +349,7 @@ const styles = StyleSheet.create({
   retryText: { color: C.accentSoft, fontSize: 14, fontWeight: '600' },
   me: { alignSelf: 'flex-end', maxWidth: '82%', backgroundColor: C.bubbleMe, borderRadius: 16, borderBottomRightRadius: 4, padding: 12 },
   bot: { alignSelf: 'flex-start', maxWidth: '86%', backgroundColor: C.surfaceInput, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 16, borderBottomLeftRadius: 4, padding: 12 },
+  botAlert: { borderColor: C.bad },
   msg: { color: C.text, fontSize: 15, lineHeight: 21 },
   inputBar: { flexDirection: 'row', alignItems: 'flex-end', gap: 4, backgroundColor: C.surfaceInput, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 28, padding: 6 },
   inputBarFocused: { borderColor: C.border },
