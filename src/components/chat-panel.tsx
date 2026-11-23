@@ -19,14 +19,15 @@ import { dictationAvailable, startDictation } from '@/lib/dictation';
 import { C, R } from '@/theme';
 
 /** Lo que hace la conversación en este momento (el prisma del Núcleo cambia de color con esto). */
-export type ChatActivity = 'listening' | 'responding' | null;
+export type ChatActivity = 'listening' | 'responding' | 'alert' | null;
 
 /** Cuánto dura el estado "respondiendo" cuando la respuesta no se lee en voz alta. */
 const REPLY_FLASH = 1500;
+const ALERT_FLASH = 4500;
 
 /**
  * `voice`: leer en voz alta las respuestas (se cambia desde el menú hamburguesa).
- * `onActivity`: avisa si DESJ te está escuchando (dictado) o respondiendo (leyendo la respuesta).
+ * `onActivity`: avisa si DESJ te está escuchando (dictado), respondiendo o dando una alerta crítica.
  */
 export function ChatPanel({ voice, onActivity }: { voice: boolean; onActivity?: (a: ChatActivity) => void }) {
   const { messages, busy, send } = useChats();
@@ -35,6 +36,7 @@ export function ChatPanel({ voice, onActivity }: { voice: boolean; onActivity?: 
   const [tray, setTray] = useState(false);
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [alerting, setAlerting] = useState(false);
   const flash = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopListening = useRef<(() => void) | null>(null);
   const list = useRef<FlatList<ChatMsg>>(null);
@@ -58,8 +60,8 @@ export function ChatPanel({ voice, onActivity }: { voice: boolean; onActivity?: 
   const canSend = Boolean(input.trim() || files.length);
 
   useEffect(() => {
-    onActivity?.(listening ? 'listening' : speaking ? 'responding' : null);
-  }, [listening, speaking, onActivity]);
+    onActivity?.(listening ? 'listening' : speaking ? (alerting ? 'alert' : 'responding') : null);
+  }, [listening, speaking, alerting, onActivity]);
 
   // Al cerrar la conversación el prisma vuelve a reposo.
   useEffect(
@@ -97,19 +99,22 @@ export function ChatPanel({ voice, onActivity }: { voice: boolean; onActivity?: 
     if (flash.current) clearTimeout(flash.current);
     const isAlert = parseAlertReply(reply).alert;
     const stopSiren = isAlert ? startAlertSound() : null;
+    setAlerting(isAlert);
     setSpeaking(true);
     if (voice) {
       // Al cortar la lectura (Speech.stop: voz apagada, dictado, cerrar el chat) también vuelve a reposo y apaga la alarma.
       const done = () => {
         stopSiren?.();
         setSpeaking(false);
+        setAlerting(false);
       };
       Speech.speak(reply, { language: 'es-ES', rate: 1.0, onDone: done, onStopped: done, onError: done });
     } else {
       flash.current = setTimeout(() => {
         stopSiren?.();
         setSpeaking(false);
-      }, isAlert ? 4000 : REPLY_FLASH);
+        setAlerting(false);
+      }, isAlert ? ALERT_FLASH : REPLY_FLASH);
     }
   };
 

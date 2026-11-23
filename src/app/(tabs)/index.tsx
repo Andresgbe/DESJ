@@ -4,7 +4,7 @@
 import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Keyboard, KeyboardAvoidingView, Platform, Pressable, StyleSheet } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
@@ -29,7 +29,7 @@ const DEMO_ALERT_TEXT =
   'ERROR CRÍTICO. SE HAN DETECTADO MÚLTIPLES FALLAS EN LAS PLATAFORMAS DE SU NEGOCIO, SEÑOR. HAY QUE TOMAR ACCIONES AL RESPECTO.';
 
 export default function Nucleo() {
-  const { busy: thinking, messages, pushAlert } = useChats();
+  const { busy: thinking, pushAlert } = useChats();
   const [talking, setTalking] = useState(false);
   const [typing, setTyping] = useState(false);
   const [voice, setVoice] = useState(true);
@@ -38,6 +38,7 @@ export default function Nucleo() {
   const [pressed, setPressed] = useState(false);
   const [activity, setActivity] = useState<ChatActivity>(null);
   const [demoAlert, setDemoAlert] = useState(false);
+  const demoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Las pestañas quedan montadas: el cerebro se pausa cuando el Núcleo no está a la vista.
   const [focused, setFocused] = useState(true);
   useFocusEffect(
@@ -45,15 +46,16 @@ export default function Nucleo() {
       setFocused(true);
       return () => {
         setFocused(false);
+        if (demoTimer.current) clearTimeout(demoTimer.current);
+        setDemoAlert(false);
         stopAlertSound();
       };
     }, []),
   );
   const { width, height, column: layoutColumn } = useLayout();
 
-  // Si el último mensaje de la conversación es de DESJ y trae una noticia crítica (o se activó el botón de prueba), DESJ y el fondo del Núcleo se ponen en rojo alerta.
-  const lastMsg = messages[messages.length - 1];
-  const critical = Boolean(!thinking && (demoAlert || (lastMsg?.from === 'desj' && lastMsg.alert)));
+  // Mientras DESJ habla una noticia crítica (por el chat o con el botón !), DESJ y el fondo del Núcleo se ponen en rojo alerta; al terminar de hablar vuelve a sus colores normales.
+  const critical = Boolean(!thinking && (demoAlert || activity === 'alert'));
   const coreState = thinking ? 'thinking' : activity === 'listening' ? 'listening' : critical ? 'alert' : (activity ?? 'online');
 
   // Solo DESJ: el cerebro tan grande como quepa. Conversando: hasta el 32 % del alto.
@@ -83,11 +85,14 @@ export default function Nucleo() {
 
   const changeVoice = (on: boolean) => {
     setVoice(on);
+    if (demoTimer.current) clearTimeout(demoTimer.current);
+    setDemoAlert(false);
     Speech.stop();
     stopAlertSound();
   };
 
   const triggerDemoAlert = () => {
+    if (demoTimer.current) clearTimeout(demoTimer.current);
     Speech.stop();
     stopAlertSound();
     if (demoAlert) {
@@ -97,7 +102,13 @@ export default function Nucleo() {
     setDemoAlert(true);
     pushAlert(DEMO_ALERT_TEXT);
     const stopSiren = startAlertSound();
-    const done = () => stopSiren();
+    const done = () => {
+      if (demoTimer.current) clearTimeout(demoTimer.current);
+      stopSiren();
+      setDemoAlert(false);
+    };
+    // Respaldo por si el navegador no dispara onDone de SpeechSynthesis al terminar la frase.
+    demoTimer.current = setTimeout(done, 9500);
     Speech.speak(DEMO_ALERT_TEXT, { language: 'es-ES', rate: 1.0, pitch: 0.95, onDone: done, onStopped: done, onError: done });
   };
 
@@ -108,6 +119,8 @@ export default function Nucleo() {
 
   const stopTalking = () => {
     Keyboard.dismiss();
+    if (demoTimer.current) clearTimeout(demoTimer.current);
+    setDemoAlert(false);
     Speech.stop();
     stopAlertSound();
     setTalking(false);
